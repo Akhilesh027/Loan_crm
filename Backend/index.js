@@ -1531,7 +1531,11 @@ app.get('/api/marketing/stats', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+app.use(express.static(path.join(__dirname, '../client/build')));
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+});
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
