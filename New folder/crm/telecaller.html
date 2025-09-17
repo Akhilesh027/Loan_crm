@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Telecaller Dashboard</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Telecaller</h1>
+      <div>
+        <a class="btn" href="index.html">Switch Role</a>
+        <button class="btn danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>Today's Follow-ups</h3>
+        <div id="followups"></div>
+      </div>
+      <div class="card">
+        <h3>All Leads (search)</h3>
+        <input id="search" placeholder="Search by name or phone" />
+        <div id="leadsTable" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>Log a Call</h3>
+        <div>
+          <label>Lead</label>
+          <select id="leadSel"></select>
+          <label>Call Status</label>
+          <select id="callStatus">
+            <option value="response">Response</option>
+            <option value="no-response">No Response</option>
+          </select>
+          <label>Note (what customer said)</label>
+          <textarea id="callNote" rows="3" placeholder="Eg: wants call tomorrow, asked loan number..."></textarea>
+          <label>Schedule next follow-up</label>
+          <input id="followDate" type="date" value="">
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn primary" id="saveCall">Save Call</button>
+            <a class="btn" id="waBtn" target="_blank">Send WhatsApp</a>
+          </div>
+          <p class="small">WhatsApp opens with template message.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Today's Calls</h3>
+        <div id="callsTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const user = requireRole("telecaller");
+
+    function refreshKPIs(){
+      const today = todayStr();
+      const todayCalls = getLS(LS_KEYS.calls).filter(c=>c.date===today);
+      const total = todayCalls.length;
+      const response = todayCalls.filter(c=>c.status==="response").length;
+      const noresp = todayCalls.filter(c=>c.status==="no-response").length;
+      const pendingFups = getLS(LS_KEYS.calls).filter(c=>c.followUp===today).length;
+
+      qs("#kpis").innerHTML = `
+        <div class="kpi"><div class="small">Pending follow-ups (today)</div><div style="font-size:24px;">${pendingFups}</div></div>
+        <div class="kpi"><div class="small">Total calls today</div><div style="font-size:24px;">${total}</div></div>
+        <div class="kpi"><div class="small">Responses</div><div style="font-size:24px;">${response}</div></div>
+        <div class="kpi"><div class="small">No response</div><div style="font-size:24px;">${noresp}</div></div>
+      `;
+    }
+
+    function renderFollowups(){
+      const rows = getLS(LS_KEYS.calls).filter(c=>c.followUp===todayStr());
+      const leads = getLS(LS_KEYS.leads);
+      renderTable(qs("#followups"), rows, [
+        {label:"Lead", render:r=> (leads.find(l=>l.id===r.leadId)||{}).name || "-" },
+        {label:"Phone", render:r=> (leads.find(l=>l.id===r.leadId)||{}).phone || "-" },
+        {label:"Status", key:"status"},
+        {label:"Note", key:"note"},
+      ]);
+    }
+
+    function renderLeads(filter=""){
+      const rows = getLS(LS_KEYS.leads).filter(l=>{
+        const f = filter.toLowerCase();
+        return !f || l.name.toLowerCase().includes(f) || l.phone.includes(f);
+      });
+      renderTable(qs("#leadsTable"), rows, [
+        {label:"Name", key:"name"},
+        {label:"Phone", key:"phone"},
+        {label:"Area", key:"area"},
+        {label:"Problem", key:"problem"},
+        {label:"CIBIL", key:"cibil"},
+        {label:"Referral", render:r=> r.referral? `${r.referral.name} (${r.referral.phone})` : "-" }
+      ]);
+      // dropdown
+      qs("#leadSel").innerHTML = rows.map(l=>`<option value="${l.id}">${l.name} — ${l.phone}</option>`).join("");
+      updateWA();
+    }
+
+    function renderTodayCalls(){
+      const today = todayStr();
+      const rows = getLS(LS_KEYS.calls).filter(c=>c.date===today);
+      const leads = getLS(LS_KEYS.leads);
+      renderTable(qs("#callsTable"), rows, [
+        {label:"Lead", render:r=> (leads.find(l=>l.id===r.leadId)||{}).name || "-" },
+        {label:"Phone", render:r=> (leads.find(l=>l.id===r.leadId)||{}).phone || "-" },
+        {label:"Status", key:"status"},
+        {label:"Follow-up", key:"followUp"},
+        {label:"Note", key:"note"},
+        {label:"WA", render:r=> r.messageSent? `<span class="badge ok">sent</span>`:`<span class="badge warn">pending</span>` }
+      ]);
+    }
+
+    function updateWA(){
+      const leadId = qs("#leadSel").value;
+      const lead = getLS(LS_KEYS.leads).find(l=>l.id===leadId);
+      const msg = `Namaste ${lead?.name||""}, mee case (${lead?.problem||"loan case"}) gurinchi connect avutunna.`;
+      qs("#waBtn").href = waLink(lead?.phone||"", msg);
+    }
+
+    // events
+    qs("#search").oninput = e => renderLeads(e.target.value);
+    qs("#leadSel").onchange = updateWA;
+    qs("#followDate").value = todayStr();
+    qs("#saveCall").onclick = () => {
+      const leadId = qs("#leadSel").value;
+      const status = qs("#callStatus").value;
+      const note = qs("#callNote").value.trim();
+      const followUp = qs("#followDate").value || todayStr();
+      const lead = getLS(LS_KEYS.leads).find(l=>l.id===leadId);
+      const call = { id:uid("call"), leadId, date:todayStr(), who:"tele", status, note, followUp, messageSent:true, waTo:lead.phone };
+      upsertLS(LS_KEYS.calls, call);
+      // success -> auto create officer case if not exists
+      if(status==="response"){
+        const allCases = getLS(LS_KEYS.cases);
+        if(!allCases.find(c=>c.leadId===leadId)){
+          const newCase = { id:lead.caseId, leadId, officerId:"u3",
+            assignDate: todayStr(), replyDate:"", closeDate:"",
+            status:"pending", paymentStatus:"pending",
+            offerAmount: 0, advance: 0, pendingAmount: 0,
+            timeline:[{date:todayStr(),note:"Telecaller marked success. Assigned to officer."}],
+            docs:{aadhaar:false, pan:false, bankStatement:false, cibilReport:false},
+            cibilBefore: lead.cibil, cibilAfter: null, problemType:lead.problem, payments:[] };
+          upsertLS(LS_KEYS.cases, newCase, "id");
+        }
+      }
+      renderTodayCalls(); renderFollowups(); refreshKPIs();
+      alert("Call saved.");
+    };
+
+    // init
+    renderLeads();
+    renderTodayCalls();
+    renderFollowups();
+    refreshKPIs();
+  </script>
+</body>
+</html>

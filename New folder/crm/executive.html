@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Marketing Executive</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Marketing Executive</h1>
+      <div>
+        <a class="btn" href="index.html">Switch Role</a>
+        <button class="btn danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Add Lead (forward to Telecaller)</h3>
+        <label>Name</label><input id="l_name">
+        <label>Phone</label><input id="l_phone">
+        <label>Email</label><input id="l_email">
+        <label>Area</label><input id="l_area" placeholder="Eg: LB Nagar, Hyderabad">
+        <label>Problem</label><input id="l_problem" placeholder="Eg: Personal loan restructure">
+        <div style="margin-top:10px;"><button class="btn primary" id="addLead">Add Lead</button></div>
+      </div>
+
+      <div class="card">
+        <h3>Daily Expense / Advance</h3>
+        <label>Type</label>
+        <select id="e_type">
+          <option>Travel</option><option>Phone</option><option>Food</option><option>AdvanceOut</option>
+        </select>
+        <label>Amount (₹)</label><input id="e_amt" type="number">
+        <label>Remarks</label><input id="e_rem">
+        <div style="margin-top:10px;"><button class="btn primary" id="addExp">Save</button></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>My Leads</h3>
+        <div id="leadList"></div>
+      </div>
+      <div class="card">
+        <h3>My Expenses & Advances</h3>
+        <div id="expList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const user = requireRole("executive");
+
+    function renderLeads(){
+      const rows = getLS(LS_KEYS.leads).filter(l=>l.source==="executive");
+      renderTable(qs("#leadList"), rows, [
+        {label:"Name", key:"name"},
+        {label:"Phone", key:"phone"},
+        {label:"Area", key:"area"},
+        {label:"Problem", key:"problem"},
+        {label:"Case ID", key:"caseId"}
+      ]);
+    }
+    function renderExpenses(){
+      const rows = getLS(LS_KEYS.expenses).filter(e=>e.execId===user.id);
+      renderTable(qs("#expList"), rows, [
+        {label:"Date", key:"date"},
+        {label:"Type", key:"type"},
+        {label:"Amount", render:r=>rupee(r.amount)},
+        {label:"Remarks", key:"remarks"},
+      ]);
+    }
+
+    qs("#addLead").onclick=()=>{
+      const name=qs("#l_name").value.trim();
+      const phone=qs("#l_phone").value.trim();
+      if(!name||!phone){ alert("Name & phone required."); return; }
+      const lead={ id:uid("lead"), caseId:uid("CASE"), name, phone,
+        email:qs("#l_email").value.trim(), area:qs("#l_area").value.trim(),
+        problem:qs("#l_problem").value.trim()||"Loan issue", aadhaar:"", pan:"", cibil:650,
+        source:"executive", createdOn: todayStr(), referral:null };
+      upsertLS(LS_KEYS.leads, lead);
+      renderLeads(); alert("Lead saved and visible to Telecaller.");
+      qsa("input").forEach(i=>i.value="");
+    };
+
+    qs("#addExp").onclick=()=>{
+      const row={ id:uid("exp"), execId:user.id, date: todayStr(),
+        type:qs("#e_type").value, amount: Number(qs("#e_amt").value||0), remarks:qs("#e_rem").value.trim() };
+      upsertLS(LS_KEYS.expenses, row);
+      renderExpenses(); alert("Saved.");
+      qs("#e_amt").value=""; qs("#e_rem").value="";
+    };
+
+    renderLeads(); renderExpenses();
+  </script>
+</body>
+</html>

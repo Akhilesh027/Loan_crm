@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Officer Workspace</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Officer</h1>
+      <div>
+        <a class="btn" href="index.html">Switch Role</a>
+        <button class="btn danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Assigned Cases</h3>
+        <div id="caseTable"></div>
+      </div>
+      <div class="card">
+        <h3>Update Case</h3>
+        <label>Case</label><select id="caseSel"></select>
+        <label>Total Case Amount (₹)</label><input id="offerAmt" type="number">
+        <label>Advance Paid (₹)</label><input id="advAmt" type="number">
+        <label>Pending Amount (₹)</label><input id="pendAmt" type="number">
+        <label>Case Status</label><select id="caseStatus"><option>pending</option><option>cleared</option></select>
+        <label>Payment Status</label><select id="payStatus"><option>pending</option><option>complete</option></select>
+        <label>Problem Type</label><input id="probType" placeholder="Eg: CIBIL correction, Loan closure">
+        <label>Reply Date</label><input id="replyDate" type="date">
+        <label>Closed Date</label><input id="closeDate" type="date">
+        <div style="margin-top:8px;"><button class="btn primary" id="saveCase">Save</button></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>Documents (upload meta only)</h3>
+        <label>File Type</label>
+        <select id="docType"><option value="aadhaar">Aadhaar</option><option value="pan">PAN</option><option value="bankStatement">Bank Statement</option><option value="cibilReport">CIBIL Report</option><option value="paymentProof">Payment Screenshot</option></select>
+        <label>File Name (simulate)</label><input id="docName" placeholder="file-name.pdf">
+        <div style="margin-top:8px;"><button class="btn" id="addDoc">Add</button></div>
+        <div id="docList" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Timeline</h3>
+        <label>Note</label><input id="tlNote" placeholder="Eg: Spoke to bank manager">
+        <div style="margin-top:8px;"><button class="btn" id="addTL">Add Timeline Note</button></div>
+        <div id="tlList" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const user = requireRole("officer");
+
+    function myCases(){
+      return getLS(LS_KEYS.cases).filter(c=>c.officerId===user.id);
+    }
+    function renderCases(){
+      const leads = getLS(LS_KEYS.leads);
+      renderTable(qs("#caseTable"), myCases(), [
+        {label:"Case ID", key:"id"},
+        {label:"Customer", render:r=> (leads.find(l=>l.id===r.leadId)||{}).name || "-" },
+        {label:"Phone",    render:r=> (leads.find(l=>l.id===r.leadId)||{}).phone || "-" },
+        {label:"Status", key:"status"},
+        {label:"Payment", key:"paymentStatus"},
+        {label:"Offer", render:r=>rupee(r.offerAmount)},
+        {label:"Advance", render:r=>rupee(r.advance)},
+        {label:"Pending", render:r=>rupee(r.pendingAmount)},
+      ]);
+      qs("#caseSel").innerHTML = myCases().map(c=>`<option value="${c.id}">${c.id}</option>`).join("");
+      fillForm();
+      renderDocs(); renderTimeline();
+    }
+    function fillForm(){
+      const c = myCases().find(x=>x.id===qs("#caseSel").value);
+      if(!c) return;
+      qs("#offerAmt").value=c.offerAmount||0;
+      qs("#advAmt").value=c.advance||0;
+      qs("#pendAmt").value=c.pendingAmount||0;
+      qs("#caseStatus").value=c.status;
+      qs("#payStatus").value=c.paymentStatus;
+      qs("#probType").value=c.problemType||"";
+      qs("#replyDate").value=c.replyDate||"";
+      qs("#closeDate").value=c.closeDate||"";
+    }
+    function saveCase(){
+      const id = qs("#caseSel").value;
+      const cs = getLS(LS_KEYS.cases);
+      const c = cs.find(x=>x.id===id);
+      c.offerAmount=Number(qs("#offerAmt").value||0);
+      c.advance=Number(qs("#advAmt").value||0);
+      c.pendingAmount=Number(qs("#pendAmt").value||0);
+      c.status=qs("#caseStatus").value;
+      c.paymentStatus=qs("#payStatus").value;
+      c.problemType=qs("#probType").value;
+      c.replyDate=qs("#replyDate").value;
+      c.closeDate=qs("#closeDate").value;
+      if(c.closeDate) c.timeline.push({date:c.closeDate, note:"Case closed"});
+      setLS(LS_KEYS.cases, cs);
+      renderCases();
+      alert("Saved.");
+    }
+    function renderDocs(){
+      const id = qs("#caseSel").value;
+      const docs = getLS(LS_KEYS.documents).filter(d=>d.caseId===id);
+      renderTable(qs("#docList"), docs, [
+        {label:"Type", key:"type"},
+        {label:"File", key:"name"},
+        {label:"Date", key:"date"}
+      ]);
+    }
+    function addDoc(){
+      const id = qs("#caseSel").value;
+      const row = { id:uid("doc"), caseId:id, type:qs("#docType").value, name:qs("#docName").value.trim(), date:todayStr() };
+      if(!row.name){ alert("Enter file name"); return; }
+      upsertLS(LS_KEYS.documents, row);
+      renderDocs();
+      qs("#docName").value="";
+    }
+    function renderTimeline(){
+      const id = qs("#caseSel").value;
+      const cs = getLS(LS_KEYS.cases);
+      const c = cs.find(x=>x.id===id);
+      renderTable(qs("#tlList"), c.timeline||[], [
+        {label:"Date", key:"date"},
+        {label:"Note", key:"note"}
+      ]);
+    }
+    function addTL(){
+      const id = qs("#caseSel").value;
+      const note = qs("#tlNote").value.trim(); if(!note) return;
+      const cs = getLS(LS_KEYS.cases);
+      const c = cs.find(x=>x.id===id);
+      c.timeline.push({date:todayStr(), note});
+      setLS(LS_KEYS.cases, cs);
+      qs("#tlNote").value="";
+      renderTimeline();
+    }
+
+    qs("#caseSel").onchange=()=>{ fillForm(); renderDocs(); renderTimeline(); };
+    qs("#saveCase").onclick=saveCase;
+    qs("#addDoc").onclick=addDoc;
+    qs("#addTL").onclick=addTL;
+
+    renderCases();
+  </script>
+</body>
+</html>

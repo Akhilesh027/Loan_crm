@@ -1,0 +1,36 @@
+.marketing-app {
+  display: flex;
+  height: 100vh;
+  background-color: #f9fafb;
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background-color: #f9fafb;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Sidebar fixed width */
+.sidebar {
+  width: 250px;
+}
+
+/* Responsive adjustments if needed */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 200px;
+  }
+}

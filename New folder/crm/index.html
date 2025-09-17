@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Problem-Solving CRM System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4e73df;
+            --secondary: #858796;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --light: #f8f9fc;
+            --dark: #5a5c69;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fc;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--primary) 0%, #224abe 100%);
+            z-index: 1000;
+            padding-top: 60px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 1rem;
+            font-weight: 500;
+        }
+        
+        .sidebar .nav-link:hover {
+            color: #fff;
+        }
+        
+        .sidebar .nav-link.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        
+        .topbar {
+            height: 60px;
+            background: #fff;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-left: 250px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: #fff;
+            border-bottom: 1px solid #e3e6f0;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        
+        .stat-card {
+            border-left: 4px solid;
+        }
+        
+        .stat-card.primary { border-left-color: var(--primary); }
+        .stat-card.success { border-left-color: var(--success); }
+        .stat-card.info { border-left-color: var(--info); }
+        .stat-card.warning { border-left-color: var(--warning); }
+        
+        .dashboard-widget {
+            height: 100%;
+        }
+        
+        .user-role-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        
+        .customer-table tr {
+            cursor: pointer;
+        }
+        
+        .customer-table tr:hover {
+            background-color: #f8f9fc;
+        }
+        
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--primary) 0%, #224abe 100%);
+        }
+        
+        .login-card {
+            width: 400px;
+            border-radius: 15px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        
+        .role-selector {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .role-selector:hover, .role-selector.active {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 80px;
+                text-align: center;
+            }
+            
+            .sidebar .nav-link span {
+                display: none;
+            }
+            
+            .sidebar .nav-link i {
+                margin-right: 0;
+                font-size: 1.5rem;
+            }
+            
+            .main-content, .topbar {
+                margin-left: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen" class="login-container">
+    <div class="card login-card">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <h2 class="text-primary"><i class="fas fa-hands-helping me-2"></i>ProblemSolveCRM</h2>
+                <p class="text-muted">Sign in to your account</p>
+            </div>
+            
+            <form id="login-form">
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" value="admin" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" value="password" required>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label">Select Role</label>
+                    <div class="d-flex gap-3">
+                        <div class="card role-selector active p-3 text-center" data-role="admin">
+                            <i class="fas fa-crown fa-2x text-primary mb-2"></i>
+                            <p class="mb-0">Admin</p>
+                        </div>
+                        <div class="card role-selector p-3 text-center" data-role="officer">
+                            <i class="fas fa-user-tie fa-2x text-info mb-2"></i>
+                            <p class="mb-0">Officer</p>
+                        </div>
+                        <div class="card role-selector p-3 text-center" data-role="telecaller">
+                            <i class="fas fa-headset fa-2x text-success mb-2"></i>
+                            <p class="mb-0">Telecaller</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="button" id="login-btn" class="btn btn-primary w-100">Login</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Main Application -->
+<div id="app-container" style="display: none;">
+    <!-- Top Navigation Bar -->
+    <nav class="topbar navbar navbar-expand justify-content-between">
+        <div>
+            <button id="sidebar-toggle" class="btn btn-link text-dark">
+                <i class="fas fa-bars"></i>
+            </button>
+            <span class="navbar-brand ms-2">ProblemSolveCRM</span>
+        </div>
+        
+        <div class="d-flex align-items-center">
+            <div class="nav-item dropdown me-3">
+                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-bell fa-fw"></i>
+                    <span class="badge bg-danger notification-badge">3</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <a class="dropdown-item" href="#">
+                        <div class="text-primary">New customer added</div>
+                        <small>15 minutes ago</small>
+                    </a>
+                    <a class="dropdown-item" href="#">
+                        <div class="text-success">Payment received</div>
+                        <small>1 hour ago</small>
+                    </a>
+                    <a class="dropdown-item" href="#">
+                        <div class="text-warning">Follow-up reminder</div>
+                        <small>Yesterday</small>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                    <img src="https://via.placeholder.com/40" class="rounded-circle me-2" height="30">
+                    <span id="current-user">Admin User</span>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a>
+                    <a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="#" id="logout-btn"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="list-group list-group-flush">
+            <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link active">
+                <i class="fas fa-home"></i> <span>Dashboard</span>
+            </a>
+            
+            <!-- Admin Specific Menu -->
+            <div id="admin-menu">
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-users"></i> <span>Customers</span>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-file-invoice-dollar"></i> <span>Payments</span>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-chart-line"></i> <span>Reports</span>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-cog"></i> <span>Settings</span>
+                </a>
+            </div>
+            
+            <!-- Officer Specific Menu -->
+            <div id="officer-menu" style="display: none;">
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-tasks"></i> <span>My Cases</span>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-file-upload"></i> <span>Upload Documents</span>
+                </a>
+            </div>
+            
+            <!-- Telecaller Specific Menu -->
+            <div id="telecaller-menu" style="display: none;">
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-phone"></i> <span>Follow-ups</span>
+                </a>
+                <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                    <i class="fas fa-user-plus"></i> <span>Add Customer</span>
+                </a>
+            </div>
+            
+            <a href="#" class="list-group-item list-group-item-action bg-transparent nav-link">
+                <i class="fas fa-question-circle"></i> <span>Help</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Dashboard Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0 text-gray-800" id="dashboard-title">Admin Dashboard</h1>
+            <div>
+                <button class="btn btn-primary">
+                    <i class="fas fa-download fa-sm"></i> Generate Report
+                </button>
+            </div>
+        </div>
+
+        <!-- Role Badge -->
+        <div class="mb-4">
+            <span class="badge bg-primary" id="role-badge">Admin</span>
+        </div>
+
+        <!-- Stats Cards Row -->
+        <div class="row">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card stat-card primary h-100">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs fw-bold text-primary text-uppercase mb-1">Total Customers</div>
+                                <div class="h5 mb-0 fw-bold text-gray-800">1,248</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-users fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card stat-card success h-100">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs fw-bold text-success text-uppercase mb-1">Success Cases</div>
+                                <div class="h5 mb-0 fw-bold text-gray-800">824</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card stat-card warning h-100">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs fw-bold text-warning text-uppercase mb-1">Pending Cases</div>
+                                <div class="h5 mb-0 fw-bold text-gray-800">126</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card stat-card info h-100">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs fw-bold text-info text-uppercase mb-1">Total Profit</div>
+                                <div class="h5 mb-0 fw-bold text-gray-800">₹2,84,400</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-rupee-sign fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts and Data Section -->
+        <div class="row">
+            <!-- Case Status Chart -->
+            <div class="col-xl-8 col-lg-7">
+                <div class="card mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 fw-bold text-primary">Monthly Revenue Trend</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="revenueChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pie Chart -->
+            <div class="col-xl-4 col-lg-5">
+                <div class="card mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 fw-bold text-primary">Revenue Distribution</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="revenuePieChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Table -->
+        <div class="card mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 fw-bold text-primary">Recent Customers</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered customer-table" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Problem Type</th>
+                                <th>Status</th>
+                                <th>Officer</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CS-1025</td>
+                                <td>Rahul Sharma</td>
+                                <td>9876543210</td>
+                                <td>Loan Issue</td>
+                                <td><span class="badge bg-success">Success</span></td>
+                                <td>Rajesh Kumar</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CS-1024</td>
+                                <td>Priya Patel</td>
+                                <td>8765432109</td>
+                                <td>CIBIL Score</td>
+                                <td><span class="badge bg-warning">Pending</span></td>
+                                <td>Anjali Singh</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CS-1023</td>
+                                <td>Vikram Malhotra</td>
+                                <td>7654321098</td>
+                                <td>Documentation</td>
+                                <td><span class="badge bg-danger">Fail</span></td>
+                                <td>Not Assigned</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CS-1022</td>
+                                <td>Sneha Desai</td>
+                                <td>6543210987</td>
+                                <td>Loan Issue</td>
+                                <td><span class="badge bg-success">Success</span></td>
+                                <td>Rajesh Kumar</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CS-1021</td>
+                                <td>Arun Joshi</td>
+                                <td>5432109876</td>
+                                <td>CIBIL Score</td>
+                                <td><span class="badge bg-warning">Pending</span></td>
+                                <td>Anjali Singh</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-primary"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telecaller Follow-ups (Visible only to Telecallers) -->
+        <div class="card mb-4" id="telecaller-followups">
+            <div class="card-header py-3">
+                <h6 class="m-0 fw-bold text-primary">Today's Follow-ups</h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">24</h5>
+                                <p class="card-text">Pending Calls</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">12</h5>
+                                <p class="card-text">Responses Today</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">8</h5>
+                                <p class="card-text">No Response</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">44</h5>
+                                <p class="card-text">Total Calls Made</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Phone</th>
+                                <th>Last Call</th>
+                                <th>Next Follow-up</th>
+                                <th>Call Count</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Rahul Sharma</td>
+                                <td>9876543210</td>
+                                <td>Today, 10:30 AM</td>
+                                <td>Tomorrow, 11:00 AM</td>
+                                <td>3</td>
+                                <td><span class="badge bg-warning">Pending</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success"><i class="fas fa-phone"></i> Call</button>
+                                    <button class="btn btn-sm btn-info"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Priya Patel</td>
+                                <td>8765432109</td>
+                                <td>Yesterday, 4:15 PM</td>
+                                <td>Today, 3:00 PM</td>
+                                <td>2</td>
+                                <td><span class="badge bg-success">Contacted</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-success"><i class="fas fa-phone"></i> Call</button>
+                                    <button class="btn btn-sm btn-info"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Officer Cases (Visible only to Officers) -->
+        <div class="card mb-4" id="officer-cases">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 fw-bold text-primary">My Assigned Cases</h6>
+                <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> New Case</button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Case ID</th>
+                                <th>Customer</th>
+                                <th>Problem</th>
+                                <th>Deal Amount</th>
+                                <th>Advance Paid</th>
+                                <th>Pending Amount</th>
+                                <th>Days Open</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CS-1025</td>
+                                <td>Rahul Sharma</td>
+                                <td>Loan Issue</td>
+                                <td>₹15,000</td>
+                                <td>₹5,000</td>
+                                <td>₹10,000</td>
+                                <td>12</td>
+                                <td><span class="badge bg-success">Cleared</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>CS-1022</td>
+                                <td>Sneha Desai</td>
+                                <td>Loan Issue</td>
+                                <td>₹12,000</td>
+                                <td>₹4,000</td>
+                                <td>₹8,000</td>
+                                <td>8</td>
+                                <td><span class="badge bg-warning">Pending</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Role selection
+        const roleSelectors = document.querySelectorAll('.role-selector');
+        roleSelectors.forEach(selector => {
+            selector.addEventListener('click', function() {
+                roleSelectors.forEach(s => s.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Login functionality
+        document.getElementById('login-btn').addEventListener('click', function() {
+            const selectedRole = document.querySelector('.role-selector.active').getAttribute('data-role');
+            
+            // Hide login screen and show app
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            
+            // Update UI based on role
+            document.getElementById('current-user').textContent = selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1) + ' User';
+            document.getElementById('role-badge').textContent = selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1);
+            document.getElementById('dashboard-title').textContent = selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1) + ' Dashboard';
+            
+            // Show/hide role-specific menus and sections
+            document.getElementById('admin-menu').style.display = selectedRole === 'admin' ? 'block' : 'none';
+            document.getElementById('officer-menu').style.display = selectedRole === 'officer' ? 'block' : 'none';
+            document.getElementById('telecaller-menu').style.display = selectedRole === 'telecaller' ? 'block' : 'none';
+            
+            document.getElementById('telecaller-followups').style.display = selectedRole === 'telecaller' ? 'block' : 'none';
+            document.getElementById('officer-cases').style.display = selectedRole === 'officer' ? 'block' : 'none';
+        });
+
+        // Logout functionality
+        document.getElementById('logout-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('app-container').style.display = 'none';
+        });
+
+        // Sidebar toggle for mobile
+        document.getElementById('sidebar-toggle').addEventListener('click', function() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const topbar = document.querySelector('.topbar');
+            
+            if (sidebar.style.width === '80px') {
+                sidebar.style.width = '250px';
+                mainContent.style.marginLeft = '250px';
+                topbar.style.marginLeft = '250px';
+            } else {
+                sidebar.style.width = '80px';
+                mainContent.style.marginLeft = '80px';
+                topbar.style.marginLeft = '80px';
+            }
+        });
+
+        // Charts
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        const revenueChart = new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Revenue',
+                    data: [65000, 59000, 80000, 81000, 86000, 82500, 95000, 105000, 110000, 115000, 120000, 125000],
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    pointRadius: 3,
+                    pointBackgroundColor: '#4e73df',
+                    pointBorderColor: '#4e73df',
+                    pointHoverRadius: 5,
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '₹' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const pieCtx = document.getElementById('revenuePieChart').getContext('2d');
+        const pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Customer Payments', 'Officer Amount', 'Profit'],
+                datasets: [{
+                    data: [75, 50, 25],
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc'],
+                    hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf'],
+                    hoverBorderColor: 'rgba(234, 236, 244, 1)',
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    });
+</script>
+</body>
+</html>

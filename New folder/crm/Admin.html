@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Admin</h1>
+      <div>
+        <a class="btn" href="index.html">Switch Role</a>
+        <button class="btn danger" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>Search Cases</h3>
+        <div class="grid cols-2">
+          <div><label>By Name/Phone</label><input id="qSimple" placeholder="Eg: Rohit / 98765"></div>
+          <div><label>By Case ID</label><input id="qCase" placeholder="CASE_..."></div>
+        </div>
+        <div style="margin-top:10px;"><button class="btn" id="goSearch">Search</button></div>
+        <div id="searchRes" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Team Overview</h3>
+        <div id="team"></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>Monthly Summary</h3>
+        <div id="monthly"></div>
+      </div>
+      <div class="card">
+        <h3>Expenses & Savings</h3>
+        <div id="expSav"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const user = requireRole("admin");
+
+    function calcKPIs(){
+      const leads = getLS(LS_KEYS.leads);
+      const cases = getLS(LS_KEYS.cases);
+      const calls = getLS(LS_KEYS.calls);
+      const docs  = getLS(LS_KEYS.documents);
+      const paid  = cases.reduce((a,c)=> a + (c.offerAmount - c.pendingAmount), 0);
+      const officerTaken = cases.reduce((a,c)=> a + (c.offerAmount), 0); // demo (you can change logic)
+      const success = cases.filter(c=>c.status==="cleared").length;
+      const pending = cases.filter(c=>c.status!=="cleared").length;
+      const fail    = calls.filter(c=>c.status==="no-response").length; // demo proxy
+
+      qs("#kpis").innerHTML = `
+        <div class="kpi"><div class="small">Total Customers</div><div style="font-size:24px;">${leads.length}</div></div>
+        <div class="kpi"><div class="small">Success / Pending / Fail</div><div style="font-size:24px;">${success} / ${pending} / ${fail}</div></div>
+        <div class="kpi"><div class="small">Customer Paid Amount (approx)</div><div style="font-size:24px;">${rupee(paid)}</div></div>
+        <div class="kpi"><div class="small">Officer Taken (offer sum)</div><div style="font-size:24px;">${rupee(officerTaken)}</div></div>
+      `;
+    }
+
+    function search(){
+      const nameph = qs("#qSimple").value.trim().toLowerCase();
+      const caseId = qs("#qCase").value.trim();
+      const leads = getLS(LS_KEYS.leads);
+      const cases = getLS(LS_KEYS.cases);
+      let res = cases.map(c=> ({c, lead: leads.find(l=>l.id===c.leadId)}));
+      if(nameph) res = res.filter(x=> x.lead?.name.toLowerCase().includes(nameph) || x.lead?.phone.includes(nameph));
+      if(caseId) res = res.filter(x=> x.c.id===caseId);
+      renderTable(qs("#searchRes"), res, [
+        {label:"Case ID", render:r=>r.c.id},
+        {label:"Customer", render:r=>r.lead?.name||"-"},
+        {label:"Phone", render:r=>r.lead?.phone||"-"},
+        {label:"Problem", render:r=>r.lead?.problem||"-"},
+        {label:"Officer", render:r=> "Priya Nair"},
+        {label:"Amount / Adv / Pending", render:r=> `${rupee(r.c.offerAmount)} / ${rupee(r.c.advance)} / ${rupee(r.c.pendingAmount)}`},
+        {label:"Status", render:r=> r.c.status},
+      ]);
+    }
+
+    function team(){
+      const users = getLS(LS_KEYS.users);
+      const tele = users.filter(u=>u.role==="telecaller").length;
+      const off  = users.filter(u=>u.role==="officer").length;
+      const exec = users.filter(u=>u.role==="executive").length;
+      renderTable(qs("#team"), [
+        {k:"Telecallers", v:tele}, {k:"Officers", v:off}, {k:"Marketing Executives", v:exec}
+      ], [
+        {label:"Role", render:r=>r.k}, {label:"Count", render:r=>r.v}
+      ]);
+    }
+
+    function monthly(){
+      const monthStart = new Date(); monthStart.setDate(1);
+      const start = monthStart.toISOString().slice(0,10);
+      const end = todayStr();
+      const cases = getLS(LS_KEYS.cases).filter(c=>{
+        const d = c.assignDate || todayStr();
+        return inRange(d,start,end);
+      });
+      const paid = sum(cases, c=> (c.offerAmount - c.pendingAmount));
+      const officerTaken = sum(cases, c=> c.offerAmount);
+      const success = cases.filter(c=>c.status==="cleared").length;
+      const pending = cases.filter(c=>c.status!=="cleared").length;
+      const fail = getLS(LS_KEYS.calls).filter(c=> c.status==="no-response" && inRange(c.date,start,end)).length;
+
+      renderTable(qs("#monthly"), [
+        {k:"This Month Cases", v:cases.length},
+        {k:"Success / Pending / Fail", v:`${success} / ${pending} / ${fail}`},
+        {k:"Customer Paid (approx)", v:rupee(paid)},
+        {k:"Officer Taken (sum offers)", v:rupee(officerTaken)},
+        {k:"Profit (Paid - Officer)", v:rupee(paid - officerTaken)},
+      ], [
+        {label:"Metric", render:r=>r.k}, {label:"Value", render:r=>r.v}
+      ]);
+    }
+
+    function expSavings(){
+      const exps = getLS(LS_KEYS.expenses);
+      const totalExp = sum(exps, e=>e.amount);
+      const cases = getLS(LS_KEYS.cases);
+      const paid = sum(cases, c=> (c.offerAmount - c.pendingAmount));
+      const officerTaken = sum(cases, c=> c.offerAmount);
+      const profit = (paid - officerTaken) - totalExp;
+      renderTable(qs("#expSav"), [
+        {k:"Admin + Executive Expenses", v:rupee(totalExp)},
+        {k:"Net Profit", v:rupee(profit)},
+      ], [
+        {label:"Metric", render:r=>r.k}, {label:"Value", render:r=>r.v}
+      ]);
+    }
+
+    qs("#goSearch").onclick=search;
+
+    calcKPIs(); team(); monthly(); expSavings();
+  </script>
+</body>
+</html>
