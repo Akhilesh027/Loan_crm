@@ -16,13 +16,11 @@ const capitalize = (str) => {
 const Header = () => {
   const navigate = useNavigate();
 
-  // Read role, name, loginTime, and lastLogin from localStorage
+  // Read role, name, loginTime from localStorage
   const role = localStorage.getItem("userRole") || "user";
   const userData = JSON.parse(localStorage.getItem("userData")) || {};
   const userName = userData.username || "User";
-  const loginTime = userData.loginTime || "N/A";   // Added loginTime
-  const lastLogin = userData.lastLogin || "N/A";   // Existing lastLogin
-
+  const loginTime = userData.loginTime || "N/A";   // Keep loginTime
   const iconClass = roleIcons[role] || "fa-user";
 
   const handleLogout = () => {
@@ -47,12 +45,7 @@ const Header = () => {
       <div className="flex items-center space-x-4">
         <div className="hidden md:flex flex-col items-end text-right">
           <div className="text-sm font-medium text-gray-700">{userName}</div>
-          <div className="text-xs text-gray-500">
-            Login time: {loginTime}
-          </div>
-          <div className="text-xs text-gray-500">
-            Last login: {lastLogin}
-          </div>
+       
         </div>
 
         <div className="relative group">

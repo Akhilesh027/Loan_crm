@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
+import AddCustomer from "./AddCustomer";
+import { FaUserPlus, FaWhatsapp } from "react-icons/fa";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://crm-backend-k8of.onrender.com/api";
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
 const Followups = () => {
   const { addCallLog } = useOutletContext();
@@ -26,12 +29,18 @@ const Followups = () => {
   const [callInProgress, setCallInProgress] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
 
-  // Fetch today's followups
+  // Customer modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerPrefill, setCustomerPrefill] = useState(null);
+
+  // Fetch followups with search term
   useEffect(() => {
     const fetchFollowups = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/followups?search=${searchTerm}`);
+        const response = await fetch(
+          `${API_BASE_URL}/followups?search=${searchTerm}`
+        );
         if (!response.ok) throw new Error("Failed to fetch followups");
         const data = await response.json();
         setFollowups(data);
@@ -74,9 +83,7 @@ const Followups = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/followups/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
       if (!response.ok) throw new Error("Failed to update status");
@@ -96,27 +103,24 @@ const Followups = () => {
       notify("Please select call status.", "error");
       return;
     }
-    if (callStatus === "Connected" && !callDuration.trim()) {
-      notify("Please enter call duration.", "error");
-      return;
-    }
     if (callStatus === "Call Back" && !callbackTime.trim()) {
       notify("Please enter callback time.", "error");
       return;
     }
 
     try {
-      const updateResponse = await fetch(`${API_BASE_URL}/followups/${callingCustomer._id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          response: responseText,
-          status: callStatus,
-          callbackTime: callStatus === "Call Back" ? callbackTime : "",
-        }),
-      });
+      const updateResponse = await fetch(
+        `${API_BASE_URL}/followups/${callingCustomer._id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            response: responseText,
+            status: callStatus,
+            callbackTime: callStatus === "Call Back" ? callbackTime : "",
+          }),
+        }
+      );
       if (!updateResponse.ok) throw new Error("Failed to update followup");
 
       setFollowups((prev) =>
@@ -143,20 +147,28 @@ const Followups = () => {
 
       const callLogResponse = await fetch(`${API_BASE_URL}/calllogs`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           time: callTime,
           customer: callingCustomer.name,
           phone: callingCustomer.phone,
-          duration: callStatus === "Connected" ? callDuration : "",
+          duration: callDuration,
           status: callStatus,
           response: responseText,
           callbackTime: callStatus === "Call Back" ? callbackTime : "",
         }),
       });
       if (!callLogResponse.ok) throw new Error("Failed to save call log");
+
+      // Open AddCustomer modal if status is Success
+      if (callStatus === "Success") {
+        setShowCustomerModal(true);
+        setCustomerPrefill({
+          name: callingCustomer.name,
+          phone: callingCustomer.phone,
+          leadId: callingCustomer._id,
+        });
+      }
 
       setCallStatus("");
       setCallDuration("");
@@ -186,9 +198,7 @@ const Followups = () => {
       };
       const response = await fetch(`${API_BASE_URL}/followups`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(lead),
       });
       if (!response.ok) throw new Error("Failed to add lead");
@@ -211,7 +221,7 @@ const Followups = () => {
 
   const getStatusBadge = (status) => {
     const statusClasses = {
-      Completed: "bg-green-100 text-green-800",
+      Success: "bg-green-100 text-green-800",
       Pending: "bg-yellow-100 text-yellow-800",
       Rejected: "bg-red-100 text-red-800",
       "Call Back": "bg-blue-100 text-blue-800",
@@ -229,6 +239,7 @@ const Followups = () => {
 
   return (
     <div className="p-6 bg-gray-50 rounded-lg shadow-md max-w-full overflow-x-auto relative">
+      {/* Notification */}
       {notification && (
         <div
           className={`fixed top-5 right-5 p-4 rounded shadow text-white ${
@@ -241,7 +252,7 @@ const Followups = () => {
       )}
 
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">Today's Follow-ups</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Total Follow-ups</h2>
         <button
           onClick={() => setAddLeadModal(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center"
@@ -283,7 +294,10 @@ const Followups = () => {
             <tbody className="text-gray-700 text-sm">
               {filteredFollowups.length > 0 ? (
                 filteredFollowups.map((f) => (
-                  <tr key={f._id} className="border-b border-gray-200 hover:bg-gray-100">
+                  <tr
+                    key={f._id}
+                    className="border-b border-gray-200 hover:bg-gray-100"
+                  >
                     <td className="py-3 px-6">{f.time}</td>
                     <td className="py-3 px-6">{f.name}</td>
                     <td className="py-3 px-6">{f.phone}</td>
@@ -294,18 +308,23 @@ const Followups = () => {
                       {editingStatus === f._id ? (
                         <select
                           value={f.status || "Pending"}
-                          onChange={(e) => handleStatusChange(f._id, e.target.value)}
+                          onChange={(e) =>
+                            handleStatusChange(f._id, e.target.value)
+                          }
                           className="border border-gray-300 rounded px-2 py-1 text-xs"
                           onBlur={() => setEditingStatus(null)}
                           autoFocus
                         >
                           <option value="Pending">Pending</option>
-                          <option value="Completed">Completed</option>
+                          <option value="Success">Success</option>
                           <option value="Rejected">Rejected</option>
                           <option value="Call Back">Call Back</option>
                         </select>
                       ) : (
-                        <div className="cursor-pointer" onClick={() => setEditingStatus(f._id)}>
+                        <div
+                          className="cursor-pointer"
+                          onClick={() => setEditingStatus(f._id)}
+                        >
                           {getStatusBadge(f.status || "Pending")}
                         </div>
                       )}
@@ -326,15 +345,27 @@ const Followups = () => {
                           className="text-green-500 hover:text-green-700"
                           title="WhatsApp"
                         >
-                          💬
+                          <FaWhatsapp size={17} />
                         </button>
-                        <button
-                          onClick={() => alert(`Send message to ${f.name}`)}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Message"
-                        >
-                          ✉️
-                        </button>
+                        {/* Show Add Customer only if status is Success */}
+                        {f.status === "Success" && (
+                          <button
+                            onClick={() => {
+                              setShowCustomerModal(true);
+                              setCustomerPrefill({
+                                name: f.name,
+                                phone: f.phone,
+                                issueType: f.issueType || "",
+                                village: f.village || "",
+                                leadId: f._id,
+                              });
+                            }}
+                            className="text-purple-600 hover:text-purple-800"
+                            title="Add Customer"
+                          >
+                            <FaUserPlus size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -351,7 +382,7 @@ const Followups = () => {
         )}
       </div>
 
-      {/* Call Outcome Modal */}
+      {/* Call Feedback Modal */}
       {callingCustomer && !callInProgress && (
         <div
           className="fixed inset-0 bg-gray-800 bg-opacity-70 flex items-center justify-center z-50"
@@ -361,7 +392,9 @@ const Followups = () => {
             className="bg-white rounded-lg p-6 max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-semibold mb-4">Call Feedback: {callingCustomer.name}</h3>
+            <h3 className="text-xl font-semibold mb-4">
+              Call Feedback: {callingCustomer.name}
+            </h3>
 
             <div className="mb-4">
               <label className="font-semibold block mb-1">Call Status</label>
@@ -371,42 +404,19 @@ const Followups = () => {
                 className="w-full border border-gray-300 rounded px-3 py-2"
               >
                 <option value="">Select status</option>
-                <option value="Connected">Connected</option>
+                <option value="Success">Success</option>
                 <option value="Not Connected">Not Connected</option>
                 <option value="Not Responded">Not Responded</option>
                 <option value="Call Back">Call Back</option>
+                <option value="Rejected">Rejected</option>
               </select>
             </div>
 
-            {callStatus === "Connected" && (
-              <>
-                <div className="mb-4">
-                  <label className="font-semibold block mb-1">Call Duration</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 10 min"
-                    value={callDuration}
-                    onChange={(e) => setCallDuration(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="font-semibold block mb-1">Response</label>
-                  <textarea
-                    rows="3"
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                    placeholder="Enter customer response..."
-                  />
-                </div>
-              </>
-            )}
-
             {callStatus === "Call Back" && (
               <div className="mb-4">
-                <label className="font-semibold block mb-1">Callback Date & Time</label>
+                <label className="font-semibold block mb-1">
+                  Callback Date & Time
+                </label>
                 <input
                   type="datetime-local"
                   value={callbackTime}
@@ -483,7 +493,10 @@ const Followups = () => {
                 type="text"
                 value={newLead.issueType}
                 onChange={(e) =>
-                  setNewLead((prev) => ({ ...prev, issueType: e.target.value }))
+                  setNewLead((prev) => ({
+                    ...prev,
+                    issueType: e.target.value,
+                  }))
                 }
                 className="w-full border border-gray-300 rounded px-3 py-2"
               />
@@ -511,8 +524,9 @@ const Followups = () => {
                 className="w-full border border-gray-300 rounded px-3 py-2"
               >
                 <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
+                <option value="Success">Success</option>
                 <option value="Rejected">Rejected</option>
+                <option value="Call Back">Call Back</option>
               </select>
             </div>
 
@@ -527,11 +541,21 @@ const Followups = () => {
                 onClick={handleAddLead}
                 className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
               >
-                Add Lead
+                Save
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Customer Modal */}
+      {showCustomerModal && (
+        <AddCustomer
+          isOpen={showCustomerModal}
+          onClose={() => setShowCustomerModal(false)}
+          prefill={customerPrefill}
+          notify={notify}
+        />
       )}
     </div>
   );

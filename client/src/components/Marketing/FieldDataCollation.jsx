@@ -21,7 +21,7 @@ const FieldDataCollection = () => {
     "Bike Showroom",
     "NDFC Manager",
     "Other Manager",
-    "Other Customers"
+    "Other Customers",
   ];
 
   // Fetch data on mount
@@ -31,7 +31,9 @@ const FieldDataCollection = () => {
 
   const fetchDataList = async () => {
     try {
-      const response = await axios.get("https://crm-backend-k8of.onrender.com/api/field-data");
+      const response = await axios.get(
+        "http://localhost:5000/api/field-data"
+      );
       setDataList(response.data);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -47,7 +49,7 @@ const FieldDataCollection = () => {
     e.preventDefault();
     try {
       const response = await axios.post(
-        "https://crm-backend-k8of.onrender.com/api/field-data",
+        "http://localhost:5000/api/field-data",
         formData
       );
       alert(response.data.message);
@@ -63,7 +65,10 @@ const FieldDataCollection = () => {
       fetchDataList(); // refresh table
     } catch (error) {
       console.error("Error saving data:", error.response || error.message);
-      alert("Error saving data: " + (error.response?.data?.message || error.message));
+      alert(
+        "Error saving data: " +
+          (error.response?.data?.message || error.message)
+      );
     }
   };
 
@@ -197,6 +202,7 @@ const FieldDataCollection = () => {
               <th className="border px-4 py-2 text-left">Executive Code</th>
               <th className="border px-4 py-2 text-left">Collection Data</th>
               <th className="border px-4 py-2 text-left">Created At</th>
+              <th className="border px-4 py-2 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -210,7 +216,27 @@ const FieldDataCollection = () => {
                 <td className="border px-4 py-2">{item.managerType}</td>
                 <td className="border px-4 py-2">{item.executiveCode}</td>
                 <td className="border px-4 py-2">{item.collectionData || "-"}</td>
-                <td className="border px-4 py-2">{new Date(item.createdAt).toLocaleString()}</td>
+                <td className="border px-4 py-2">
+                  {new Date(item.createdAt).toLocaleString()}
+                </td>
+                <td className="border px-4 py-2 space-x-2">
+                  {/* Call button */}
+                  <a
+                    href={`tel:${item.managerPhone}`}
+                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                  >
+                    Call
+                  </a>
+                  {/* WhatsApp button */}
+                  <a
+                    href={`https://wa.me/${item.managerPhone}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
+                  >
+                    WhatsApp
+                  </a>
+                </td>
               </tr>
             ))}
           </tbody>

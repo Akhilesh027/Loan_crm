@@ -5,7 +5,6 @@ import "./Sidebar.css"; // Import the CSS file
 const menuItems = {
   telecaller: [
     { path: "/telecaller/dashboard", icon: "fa-home", label: "Dashboard" },
-    { path: "/telecaller/add-customer", icon: "fa-user-plus", label: "Add Customer" },
     { path: "/telecaller/today-followup", icon: "fa-list", label: "Today's Follow-ups" },
     { path: "/telecaller/followups", icon: "fa-list", label: "Follow-ups" },
     { path: "/telecaller/call-logs", icon: "fa-phone", label: "Call Logs" },
@@ -30,8 +29,9 @@ const menuItems = {
     { path: "/admin/all-cases", icon: "fa-briefcase", label: "All Cases" },
     { path: "/admin/field-data", icon: "fa-clipboard-list", label: "Field Data Collection" },
     { path: "/admin/Leadss", icon: "fa-clipboard-list", label: "Leads" },
-    { path: "/admin/Customers", icon: "fa-briefcase", label: "All Customers" },
     { path: "/admin/financial-reports", icon: "fa-chart-line", label: "Financial Reports" },
+    { path: "/admin/Requests", icon: "fa-chart-line", label: "Requests" },
+    { path: "/admin/Attendence", icon: "fa-chart-line", label: "Attendence" },
     { path: "/admin/telecaller", icon: "fa-clipboard-list", label: "Telecaller" },
     { path: "/admin/marketing", icon: "fa-clipboard-list", label: "Marketing" },
     { path: "/admin/agent", icon: "fa-clipboard-list", label: "agent" },
@@ -45,32 +45,40 @@ const Sidebar = () => {
   const role = localStorage.getItem("userRole") || "user";
   const items = menuItems[role] || [];
   const displayRole = role.charAt(0).toUpperCase() + role.slice(1);
-
-  const handleLogout = async () => {
-  const logoutTime = new Date().toISOString();
+const handleLogout = async () => {
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("authToken");
 
   try {
-    await fetch(`${process.env.REACT_APP_API_URL || "https://crm-backend-k8of.onrender.com/api/auth/logout"}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ userId, logoutTime }),
-    });
+    const res = await fetch(
+      `${process.env.REACT_APP_API_URL || "http://localhost:5000/api/auth/logout"}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (res.ok) {
+      const loginTime = new Date(data.loginTime).toLocaleTimeString();
+      const logoutTime = new Date(data.logoutTime).toLocaleTimeString();
+      alert(
+        `You logged in at ${loginTime} and logged out at ${logoutTime}. Total Time: ${data.duration}`
+      );
+    } else {
+      alert(data.message || "Logout failed!");
+    }
   } catch (error) {
     console.error("Logout tracking failed:", error);
-    // You may choose to still proceed with logout or show an error
   }
 
   // Clear local storage and redirect
-  localStorage.removeItem("authToken");
-  localStorage.removeItem("userRole");
-  localStorage.removeItem("userData");
-  localStorage.removeItem("userId");
-  localStorage.removeItem("loginTime");
+  localStorage.clear();
   navigate("/login", { replace: true });
 };
 

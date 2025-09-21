@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
@@ -48,6 +48,8 @@ import AgentUsers from './components/Admin/AgentUser.jsx';
 import TodaysFollowups from './components/Telecaller/pages/Todayfollowups.jsx';
 import FieldDataa from './components/Telecaller/pages/FieldDataa.jsx';
 import Followups from './components/Telecaller/pages/FollowUps.jsx';
+import AdminCaseRequests from './components/Admin/Request.jsx';
+import Attendence from './components/Admin/Attendence.jsx';
 
 function App() {
   return (
@@ -103,6 +105,8 @@ function App() {
               <Route index element={<AdminDashboard />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="all-cases" element={<AllCases />} />
+              <Route path="requests" element={<AdminCaseRequests />} />
+              <Route path="Attendence" element={<Attendence />} />
               <Route path="field-data" element={<FieldData />} />
               <Route path="telecaller" element={<TelecallerUsers />} />
               <Route path="marketing" element={<MarketingUsers />} />

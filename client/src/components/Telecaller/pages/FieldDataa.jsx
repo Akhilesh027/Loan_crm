@@ -21,7 +21,7 @@ const FieldDataa= () => {
   const fetchDataList = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("https://crm-backend-k8of.onrender.com/api/field-data");
+      const response = await axios.get("http://localhost:5000/api/field-data");
       setDataList(response.data || []);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -49,7 +49,7 @@ const FieldDataa= () => {
   // Handle inline status change
   const handleStatusChange = async (id, status) => {
     try {
-      await axios.put(`https://crm-backend-k8of.onrender.com/api/field-data/${id}/status`, { status });
+      await axios.put(`http://localhost:5000/api/field-data/${id}/status`, { status });
       setDataList((prev) =>
         prev.map((item) => (item._id === id ? { ...item, status } : item))
       );
@@ -71,7 +71,7 @@ const FieldDataa= () => {
   const handleCallSave = async () => {
     if (!callingCustomer) return;
     try {
-      await axios.put(`https://crm-backend-k8of.onrender.com/api/field-data/${callingCustomer._id}/call`, {
+      await axios.put(`http://localhost:5000/api/field-data/${callingCustomer._id}/call`, {
         callStatus,
         callDuration,
         responseText,

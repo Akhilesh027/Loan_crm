@@ -14,7 +14,7 @@ const MarketingDashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get("https://crm-backend-k8of.onrender.com/api/marketing/stats");
+        const res = await axios.get("http://localhost:5000/api/marketing/stats");
         const { dashboardStatsTop, recentVisits: visits } = res.data;
 
         setStats(dashboardStatsTop);

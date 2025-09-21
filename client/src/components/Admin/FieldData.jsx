@@ -36,8 +36,7 @@ const FieldData = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get("https://crm-backend-k8of.onrender.com/api/field-data");
-      // Assuming backend returns array of objects with addedBy populated { addedBy: { name: "" }, ... }
+      const response = await axios.get("http://localhost:5000/api/field-data");
       setDataList(response.data || []);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -58,7 +57,7 @@ const FieldData = () => {
     setError(null);
     try {
       const response = await axios.post(
-        "https://crm-backend-k8of.onrender.com/api/field-data",
+        "http://localhost:5000/api/field-data",
         formData
       );
       alert(response.data.message || "Data saved successfully");
@@ -67,12 +66,12 @@ const FieldData = () => {
         bankArea: "",
         managerName: "",
         managerPhone: "",
-        managerType: "", // Reset manager type
+        managerType: "",
         executiveCode: "",
         collectionData: "",
       });
       setShowForm(false);
-      fetchDataList(); // Refresh table
+      fetchDataList();
     } catch (error) {
       console.error("Error saving data:", error);
       setError(
@@ -261,6 +260,7 @@ const FieldData = () => {
                 <th className="border px-4 py-2 text-left">Executive Code</th>
                 <th className="border px-4 py-2 text-left">Collection Data</th>
                 <th className="border px-4 py-2 text-left">Created At</th>
+                <th className="border px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -276,6 +276,24 @@ const FieldData = () => {
                   <td className="border px-4 py-2">{item.collectionData || "-"}</td>
                   <td className="border px-4 py-2">
                     {new Date(item.createdAt).toLocaleString()}
+                  </td>
+                  <td className="border px-4 py-2 space-x-2">
+                    {/* Call button */}
+                    <a
+                      href={`tel:${item.managerPhone}`}
+                      className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                    >
+                      Call
+                    </a>
+                    {/* WhatsApp button */}
+                    <a
+                      href={`https://wa.me/${item.managerPhone}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
+                    >
+                      WhatsApp
+                    </a>
                   </td>
                 </tr>
               ))}

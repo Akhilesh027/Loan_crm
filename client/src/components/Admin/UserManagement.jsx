@@ -24,7 +24,7 @@ const UserManagement = () => {
       const token = localStorage.getItem("authToken");
       if (!token) throw new Error("Not authenticated");
 
-      const response = await fetch("https://crm-backend-k8of.onrender.com/api/users", {
+      const response = await fetch("http://localhost:5000/api/users", {
         headers: {
           Authorization: `Bearer ${token}`,
         },

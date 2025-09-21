@@ -27,7 +27,7 @@ const AdminDashboard = () => {
   const [revenueExpenseData, setRevenueExpenseData] = useState({});
 
   useEffect(() => {
-    axios.get("https://crm-backend-k8of.onrender.com/api/admin/stats")
+    axios.get("http://localhost:5000/api/admin/stats")
       .then(res => {
         const { callStats, dashboardStatsTop, dashboardStatsBottom, recentTransactions } = res.data;
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://crm-backend-k8of.onrender.com/api";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
 const statusColors = {
   Pending: "bg-red-200 text-red-800",
@@ -13,6 +13,7 @@ const LeadsAdmin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [addLeadModal, setAddLeadModal] = useState(false);
+  const [messageHistory, setMessageHistory] = useState([]);
 
   const [newLead, setNewLead] = useState({
     name: "",
@@ -83,8 +84,15 @@ const LeadsAdmin = () => {
     window.open(`tel:${phone}`, "_blank");
   };
 
-  const handleWhatsApp = (phone) => {
-    window.open(`https://wa.me/${phone.replace(/\D/g, "")}`, "_blank");
+  const handleWhatsApp = (lead) => {
+    const phone = lead.phone.replace(/\D/g, "");
+    window.open(`https://wa.me/${phone}`, "_blank");
+
+    // Save to message history
+    setMessageHistory((prev) => [
+      ...prev,
+      { id: lead._id, name: lead.name, message: `Contacted on WhatsApp: ${phone}` },
+    ]);
   };
 
   return (
@@ -138,20 +146,45 @@ const LeadsAdmin = () => {
                     </span>
                   </td>
                   <td className="border border-gray-300 px-4 py-2">
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-4">
                       <button
                         onClick={() => handleCall(lead.phone)}
                         className="text-green-600 hover:text-green-800"
                         title="Call"
+                        aria-label="Call"
                       >
-                        📞
+                        {/* Phone SVG Icon */}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M3 5h2l3.6 7.59a1 1 0 0 1-.21 1.11L6 17l4 4 3.38-2.25a1 1 0 0 1 1.11-.21L19 19v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5z"
+                          />
+                        </svg>
                       </button>
+
                       <button
-                        onClick={() => handleWhatsApp(lead.phone)}
+                        onClick={() => handleWhatsApp(lead)}
                         className="text-green-500 hover:text-green-700"
                         title="WhatsApp"
+                        aria-label="WhatsApp"
                       >
-                        💬
+                        {/* WhatsApp SVG Icon */}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M20.52 3.48a11.94 11.94 0 0 0-16.9 16.9l-1.66 5.11 5.25-1.55a11.93 11.93 0 0 0 13.9-20.46Zm-7.85 14.79a7.17 7.17 0 0 1-3.67-1.08l-.26-.16-2.21.65.59-2.17-.17-.28a7.07 7.07 0 1 1 5.72 3.04Z" />
+                        </svg>
                       </button>
                     </div>
                   </td>
@@ -160,6 +193,19 @@ const LeadsAdmin = () => {
             )}
           </tbody>
         </table>
+      )}
+
+      {messageHistory.length > 0 && (
+        <div className="mt-8 p-4 bg-gray-100 rounded-md max-w-3xl mx-auto">
+          <h3 className="text-lg font-semibold mb-3">WhatsApp Message History</h3>
+          <ul className="list-disc list-inside space-y-1 text-gray-700">
+            {messageHistory.map(({ id, name, message }) => (
+              <li key={id}>
+                <strong>{name}</strong>: {message}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {addLeadModal && (

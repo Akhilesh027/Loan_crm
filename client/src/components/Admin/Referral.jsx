@@ -17,7 +17,7 @@ const ReferralManagement = () => {
   const fetchReferrals = async () => {
     try {
       setLoading(true);
-      const res = await fetch("https://crm-backend-k8of.onrender.com/api/referrals");
+      const res = await fetch("http://localhost:5000/api/referrals");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch referrals");
       setReferrals(data);
@@ -40,7 +40,7 @@ const ReferralManagement = () => {
 
   const handleAddReferral = async () => {
     try {
-      const res = await fetch("https://crm-backend-k8of.onrender.com/api/referrals", {
+      const res = await fetch("http://localhost:5000/api/referrals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newReferral)

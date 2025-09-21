@@ -16,6 +16,8 @@ const Expense = require('./models/Expense.js');
 const Calllog = require('./models/Calllog.js');
 const fs = require("fs");
 const Referral = require('./models/Referral.js');
+const ChatResponse = require('./models/ChatResponse.js');
+const AttendenceLog = require('./models/AttendenceLog.js');
 const app = express();
 
 mongoose.connect(
@@ -116,24 +118,36 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { username, email, password } = req.body;
+
+    // 1. Find user (by username or email)
     const query = username ? { username } : { email };
     const user = await User.findOne(query);
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid username/email or password" });
     }
 
+    // 2. Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: "Invalid username/email or password" });
     }
 
-    // Generate JWT token
+    // 3. Generate JWT token
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || "BANNU9", // ✅ move secret to .env in production
+      process.env.JWT_SECRET || "BANNU9", // move secret to .env
       { expiresIn: "1d" }
     );
 
+    // 4. Save login time in AttendanceLog
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    await AttendenceLog.create({
+      userId: user._id,
+      loginTime: new Date(),
+      logDate: today,
+    });
+
+    // 5. Send response
     res.json({
       success: true,
       message: "Login successful",
@@ -145,14 +159,53 @@ app.post("/api/auth/login", async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         phone: user.phone,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (err) {
     console.error("Login Error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// Example Logout Route
+// User logout
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    // Find today's latest login
+    const attendance = await AttendenceLog.findOne({
+      userId,
+      logoutTime: null, // Only open session
+    }).sort({ loginTime: -1 });
+
+    if (!attendance) {
+      return res.status(404).json({ message: "No active session found" });
+    }
+
+    // Update logout time
+    attendance.logoutTime = new Date();
+    await attendance.save();
+
+    // Calculate duration
+    const durationMs =
+      new Date(attendance.logoutTime) - new Date(attendance.loginTime);
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs / (1000 * 60)) % 60);
+
+    res.json({
+      message: "Logout successful",
+      loginTime: attendance.loginTime,
+      logoutTime: attendance.logoutTime,
+      duration: `${hours}h ${minutes}m`,
+    });
+  } catch (err) {
+    console.error("Logout error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 
 app.get('/api/users', async (req, res) => {
   try {
@@ -161,6 +214,33 @@ app.get('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ success: false, error: 'Server error while fetching users' });
+  }
+});
+app.get('/api/requests', async (req, res) => {
+  try {
+    // Get all users without password
+    const users = await ChatResponse.find().select('-password').sort({ name: 1 });
+
+    // For each user, fetch case and agent details asynchronously
+    const usersWithDetails = await Promise.all(
+      users.map(async (user) => {
+        // Fetch case details based on caseId
+        const caseDetails = user.caseId ? await Customer.findById(user.caseId).lean() : null;
+        // Fetch agent details based on agentId
+        const agentDetails = user.agentId ? await User.findById(user.agentId).lean() : null;
+
+        return {
+          ...user.toObject(),
+          caseDetails,
+          agentDetails,
+        };
+      })
+    );
+
+    res.json({ success: true, users: usersWithDetails });
+  } catch (error) {
+    console.error('Error fetching users with details:', error);
+    res.status(500).json({ success: false, error: 'Server error while fetching users with details' });
   }
 });
 const generateSequentialCaseId = async () => {
@@ -197,50 +277,88 @@ const fixExistingCustomers = async () => {
 
 // Call this function once
 fixExistingCustomers();
-// Create a new customer
 app.post('/api/customers', upload.fields([
   { name: 'aadhaarDoc', maxCount: 1 },
   { name: 'panDoc', maxCount: 1 },
   { name: 'accountStatementDoc', maxCount: 1 },
+  // Expect field files for custom fields as customFieldFile_0, customFieldFile_1, ...
 ]), async (req, res) => {
   try {
-    if (req.body.bank === 'other' && req.body.otherBank) {
-      req.body.bank = req.body.otherBank;
+    // Normalize banks and otherBanks arrays
+    let banks = req.body.banks || [];
+    if (typeof banks === 'string') banks = [banks];
+
+    let otherBanks = req.body.otherBanks || [];
+    if (typeof otherBanks === 'string') otherBanks = [otherBanks];
+
+    // Extract accountNumbers map
+    const accountNumbers = {};
+    Object.keys(req.body).forEach(key => {
+      const match = key.match(/^accountNumbers\[(.+)\]$/);
+      if (match) accountNumbers[match[1]] = req.body[key];
+    });
+
+    // Parse customFields JSON string
+    let customFields = [];
+    if (req.body.customFields) {
+      try {
+        customFields = JSON.parse(req.body.customFields);
+      } catch {
+        customFields = [];
+      }
     }
 
-    // Add file paths to req.body.documents
-    req.body.documents = {
-      aadhaar: req.files.aadhaarDoc ? req.files.aadhaarDoc[0].filename : '',
-      pan: req.files.panDoc ? req.files.panDoc[0].filename : '',
-      accountStatement: req.files.accountStatementDoc ? req.files.accountStatementDoc[0].filename : ''
+    // Assign uploaded files filenames to customFields of type 'file'
+    customFields = customFields.map((field, idx) => {
+      if (field.type === 'file') {
+        const fileFieldName = `customFieldFile_${idx}`;
+        if (req.files && req.files[fileFieldName] && req.files[fileFieldName][0]) {
+          return { ...field, value: req.files[fileFieldName][0].filename };
+        }
+      }
+      return field;
+    });
+
+    const customerData = {
+      ...req.body,
+      banks,
+      otherBanks,
+      accountNumbers,
+      customFields,
+      documents: {
+        aadhaar: req.files.aadhaarDoc ? req.files.aadhaarDoc[0].filename : '',
+        pan: req.files.panDoc ? req.files.panDoc[0].filename : '',
+        accountStatement: req.files.accountStatementDoc ? req.files.accountStatementDoc[0].filename : ''
+      }
     };
+
+    // Remove old keys that conflict with schema
+    delete customerData.bank;
+    delete customerData.otherBank;
+    delete customerData.customFields; // remove string version
+    Object.keys(customerData).forEach(key => {
+      if (key.startsWith('accountNumbers[')) delete customerData[key];
+    });
 
     // Generate unique case ID
     const generateCaseId = async () => {
       try {
-        // Find the highest existing caseId
         const lastCustomer = await Customer.findOne().sort({ createdAt: -1 });
-        
         if (lastCustomer && lastCustomer.caseId) {
-          // Extract number from existing caseId and increment
           const lastCaseNumber = parseInt(lastCustomer.caseId.split('-')[1]);
           const newCaseNumber = lastCaseNumber + 1;
           return `CASE-${String(newCaseNumber).padStart(4, '0')}`;
-        } else {
-          // No customers exist yet, start from CASE-0001
-          return 'CASE-0001';
         }
+        return 'CASE-0001';
       } catch (error) {
         console.error('Error generating case ID:', error);
-        // Fallback: use timestamp-based ID
         return `CASE-TEMP-${Date.now()}`;
       }
     };
 
-    // Generate case ID and add to request body
-    req.body.caseId = await generateCaseId();
+    customerData.caseId = await generateCaseId();
 
-    const customer = new Customer(req.body);
+    const customer = new Customer(customerData);
     await customer.save();
 
     res.status(201).json({
@@ -249,15 +367,14 @@ app.post('/api/customers', upload.fields([
     });
   } catch (error) {
     console.error('Error saving customer:', error);
-    
-    // Handle duplicate key error specifically
+
     if (error.code === 11000 && error.keyPattern && error.keyPattern.caseId) {
       return res.status(400).json({
         error: 'Duplicate case ID',
         message: 'A customer with this case ID already exists. Please try again.'
       });
     }
-    
+
     res.status(500).json({
       error: 'Failed to save customer',
       message: error.message
@@ -265,6 +382,45 @@ app.post('/api/customers', upload.fields([
   }
 });
 
+// routes/customers.js - Add this route
+
+// Update case status
+app.post('/api/customers/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    // Validate input
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
+    }
+    
+    // Find the customer case
+    const customer = await Customer.findById(req.params.id);
+    if (!customer) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+    
+    // Update status
+    customer.status = status;
+    
+    // Add a note about the status change
+    customer.notes = customer.notes || [];
+    customer.notes.push({
+      content: `Status updated to ${status}`,
+      addedBy: req.user ? req.user.username : 'Admin',
+      addedAt: new Date()
+    });
+    
+    await customer.save();
+    
+    res.json({ 
+      message: 'Status updated successfully', 
+      customer 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // Get all users with role 'agent'
 app.get('/api/users', async (req, res) => {
   try {
@@ -290,17 +446,307 @@ app.get('/api/customers', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch customers' });
   }
 });
+app.get("/api/attendance", async (req, res) => {
+  try {
+    const logs = await AttendenceLog.find()
+      .populate("userId", "firstName lastName email role") // join user info
+      .sort({ loginTime: -1 });
 
-// Get a single customer by ID
+    const formattedLogs = logs.map((log) => {
+      const durationMs = log.logoutTime
+        ? new Date(log.logoutTime) - new Date(log.loginTime)
+        : 0;
+      const hours = Math.floor(durationMs / (1000 * 60 * 60));
+      const minutes = Math.floor((durationMs / (1000 * 60)) % 60);
+
+      return {
+        employee: `${log.userId?.firstName || ""} ${log.userId?.lastName || ""}`,
+        email: log.userId?.email,
+        role: log.userId?.role,
+        loginTime: log.loginTime,
+        logoutTime: log.logoutTime,
+        duration: log.logoutTime ? `${hours}h ${minutes}m` : "Active",
+      };
+    });
+
+    res.json({ success: true, logs: formattedLogs });
+  } catch (err) {
+    console.error("Attendance fetch error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+// // Get a single customer by ID
+// app.get('/api/customers/:id', async (req, res) => {
+//   try {
+//     const customer = await Customer.findById(req.params.id);
+//     if (!customer) {
+//       return res.status(404).json({ error: 'Customer not found' });
+//     }
+//     res.json(customer);
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to fetch customer' });
+//   }
+// });
+
+
+// Get customer by ID
 app.get('/api/customers/:id', async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findById(req.params.id).populate('assignedTo', 'username');
+    
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
-    res.json(customer);
+    
+    res.status(200).json(customer);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch customer' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign officer to case
+app.post('/api/customers/:id/assign', async (req, res) => {
+  try {
+    const { agentId, totalAmount, advanceAmount, paymentProof } = req.body;
+    
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      {
+        assignedTo: agentId,
+        status: 'In Progress',
+        ...(totalAmount && { totalAmount }),
+        ...(advanceAmount && { advanceAmount }),
+        ...(paymentProof && { paymentProof })
+      },
+      { new: true, runValidators: true }
+    ).populate('assignedTo', 'username');
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete case
+app.post('/api/customers/:id/complete', async (req, res) => {
+  try {
+    const { cibilBefore, cibilAfter } = req.body;
+    
+    if (!cibilBefore || !cibilAfter) {
+      return res.status(400).json({ error: 'Both CIBIL scores are required' });
+    }
+    
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      {
+        cibilBefore,
+        cibilAfter,
+        status: 'Solved'
+      },
+      { new: true, runValidators: true }
+    ).populate('assignedTo', 'username');
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update customer
+app.post('/api/customers/:id/update', async (req, res) => {
+  try {
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    ).populate('assignedTo', 'username');
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add payment details
+app.post('/api/customers/:id/payment', async (req, res) => {
+  try {
+    const { totalAmount, advanceAmount, paymentProof } = req.body;
+    
+    if (!totalAmount || !advanceAmount) {
+      return res.status(400).json({ error: 'Total amount and advance amount are required' });
+    }
+    
+    if (parseFloat(advanceAmount) > parseFloat(totalAmount)) {
+      return res.status(400).json({ error: 'Advance amount cannot be greater than total amount' });
+    }
+    
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      {
+        totalAmount,
+        advanceAmount,
+        ...(paymentProof && { paymentProof })
+      },
+      { new: true, runValidators: true }
+    ).populate('assignedTo', 'username');
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add call response
+app.post('/api/customers/:id/call', async (req, res) => {
+  try {
+    const { response, status, nextCallDate } = req.body;
+    
+    if (!response) {
+      return res.status(400).json({ error: 'Call response is required' });
+    }
+    
+    const customer = await Customer.findById(req.params.id);
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    customer.callHistory.push({
+      response,
+      status,
+      nextCallDate: nextCallDate || null
+    });
+    
+    // Update the main status if it's different
+    if (status !== customer.status) {
+      customer.status = status;
+    }
+    
+    await customer.save();
+    await customer.populate('assignedTo', 'username');
+    
+    res.status(200).json({ customer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get call history
+app.get('/api/customers/:id/call-history', async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.params.id).select('callHistory');
+    
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    res.status(200).json({ callHistory: customer.callHistory });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post("/api/customers/:caseId/request", async (req, res) => {
+  const { caseId } = req.params;
+  const { message } = req.body;
+  const agentId = req.body.agentId;
+  const agentName = req.body.agentName;
+
+  if (!message) {
+    return res.status(400).json({ error: "Request message is required" });
+  }
+
+  try {
+    const newRequest = new ChatResponse({
+      caseId,
+      message,
+      agentId,
+      agentName,
+      status: "Pending",
+      timestamp: new Date(),
+    });
+    await newRequest.save();
+
+    return res.status(201).json({ success: true, request: newRequest });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error while creating request" });
+  }
+});
+app.post("/api/customers/requests/:requestId/action", async (req, res) => {
+  const { requestId } = req.params;
+  const { status, adminResponse } = req.body;
+
+  // Validate required inputs
+  if (!["Resolved", "Rejected"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status" });
+  }
+  if (!adminResponse || adminResponse.trim() === "") {
+    return res.status(400).json({ error: "Admin response is required" });
+  }
+
+  try {
+    // Find existing request
+    const request = await ChatResponse.findById(requcasestId);
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    // Update status and admin response
+    request.status = status;
+    request.adminResponse = adminResponse;
+    await request.save();
+
+    return res.json({ success: true, request });
+  } catch (err) {
+    console.error("Admin request action error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/customers/:caseId/requests - get chat requests history for a case
+app.get("/api/customers/:caseId/requests", async (req, res) => {
+  const { caseId } = req.params;
+
+  try {
+    const requests = await ChatResponse.find({ caseId }).sort({ timestamp: -1 });
+    return res.json({ success: true, requests });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error while fetching requests" });
+  }
+});
+
+// Upload payment proof
+app.post('/api/customers/payment-proof', upload.single('paymentProof'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    res.status(200).json({
+      message: 'File uploaded successfully',
+      filename: req.file.filename
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -517,6 +963,117 @@ app.post('/api/calllogs', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+// GET attendance for a specific user
+app.get("/api/attendance/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Find today's attendance for the user
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const attendance = await AttendenceLog.findOne({
+      userId,
+      createdAt: { $gte: todayStart, $lt: todayEnd },
+    }).sort({ createdAt: -1 });
+
+    if (!attendance) {
+      return res.json({
+        success: true,
+        loginTime: null,
+        logoutTime: null,
+      });
+    }
+
+    res.json({
+      success: true,
+      loginTime: attendance.loginTime,
+      logoutTime: attendance.logoutTime,
+    });
+  } catch (err) {
+    console.error("Error fetching attendance:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// GET /api/dashboard/telecaller/:userId
+app.get("/api/dashboard/telecaller/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Validate userId
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    // Today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Count today's calls for this telecaller
+    const todaysCalls = await Calllog.countDocuments({
+      createdBy: userId,
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // Count responsive calls (Connected)
+    const responsiveCalls = await Calllog.countDocuments({
+      createdBy: userId,
+      status: "Connected",
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // Count no response calls
+    const noResponseCalls = await Calllog.countDocuments({
+      createdBy: userId,
+      status: { $in: ["Not Connected", "Not Responded"] },
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // Count pending follow-ups
+    const pendingFollowups = await Followup.countDocuments({
+      assignedTo: userId,
+      response: "",
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // Return stats array
+    res.json([
+      {
+        icon: "fa-phone",
+        value: todaysCalls,
+        label: "Today's Calls",
+        color: "bg-blue-500",
+      },
+      {
+        icon: "fa-check-circle",
+        value: responsiveCalls,
+        label: "Responsive Calls",
+        color: "bg-green-500",
+      },
+      {
+        icon: "fa-times-circle",
+        value: noResponseCalls,
+        label: "No Response",
+        color: "bg-red-500",
+      },
+      {
+        icon: "fa-bell",
+        value: pendingFollowups,
+        label: "Pending Follow-ups",
+        color: "bg-yellow-500",
+      },
+    ]);
+  } catch (error) {
+    console.error("Telecaller stats error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
@@ -671,7 +1228,15 @@ app.get("/api/agent/stats/:officerId", async (req, res) => {
       { $group: { _id: null, total: { $sum: "$pendingAmount" } } },
     ]);
     const pendingAmount = pendingAmountAgg[0]?.total || 0;
+ const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
+    const todayAttendance = await AttendenceLog.find({
+      userId: officerId,
+      createdAt: { $gte: today, $lt: tomorrow },
+    }).sort({ createdAt: -1 });
     // Prepare stats for frontend
     const stats = [
       { icon: "fa-briefcase", label: "Assigned Cases", value: assignedCasesCount },
@@ -708,6 +1273,7 @@ app.get("/api/marketing/stats/:marketingId", async (req, res) => {
   try {
     const marketingId = req.params.marketingId;
 
+    // === Visits & Leads Stats ===
     const bankVisitsCount = await Customer.countDocuments({ marketingId, type: "Bank Visit" });
     const nbfcVisitsCount = await Customer.countDocuments({ marketingId, type: "NBFC Visit" });
     const carShowroomVisitsCount = await Customer.countDocuments({ marketingId, type: "Car Showroom Visit" });
@@ -715,7 +1281,10 @@ app.get("/api/marketing/stats/:marketingId", async (req, res) => {
     const otherManagerVisitsCount = await Customer.countDocuments({ marketingId, type: "Other Manager Visit" });
     const otherCustomerVisitsCount = await Customer.countDocuments({ marketingId, type: "Other Customer Visit" });
 
-    const totalMonthlyVisit = await Customer.countDocuments({ marketingId, createdAt: { $gte: new Date(new Date().setDate(1)) } });
+    const totalMonthlyVisit = await Customer.countDocuments({ 
+      marketingId, 
+      createdAt: { $gte: new Date(new Date().setDate(1)) } 
+    });
 
     const totalExpensesAgg = await Expense.aggregate([
       { $match: { marketingId: marketingId } },
@@ -734,10 +1303,10 @@ app.get("/api/marketing/stats/:marketingId", async (req, res) => {
       { icon: "fa-users", label: "Other Customer Visit", value: otherCustomerVisitsCount },
       { icon: "fa-calendar-check", label: "Total Monthly Visit", value: totalMonthlyVisit },
       { icon: "fa-rupee-sign", label: "Total Expenses", value: `₹${totalExpenses.toLocaleString()}` },
-      { icon: "fa-handshake", label: "New Leads", value: newLeadsCount }
+      { icon: "fa-handshake", label: "New Leads", value: newLeadsCount },
     ];
 
-    // Recent visits (latest 5)
+    // === Recent visits (latest 5) ===
     const recentVisits = await Customer.find({ marketingId })
       .sort({ createdAt: -1 })
       .limit(5);
@@ -751,9 +1320,28 @@ app.get("/api/marketing/stats/:marketingId", async (req, res) => {
       status: visit.status || "Pending"
     }));
 
+    // === Attendance (login/logout) ===
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const attendance = await AttendenceLog.findOne({
+      userId: marketingId,
+      createdAt: { $gte: todayStart, $lt: todayEnd },
+    }).sort({ createdAt: -1 });
+
+    const attendanceData = attendance
+      ? {
+          loginTime: attendance.loginTime,
+          logoutTime: attendance.logoutTime,
+        }
+      : { loginTime: null, logoutTime: null };
+
     res.json({
       stats,
-      visits: formattedVisits
+      visits: formattedVisits,
+      attendance: attendanceData,
     });
   } catch (error) {
     console.error("Marketing dashboard error:", error);
@@ -1352,6 +1940,28 @@ app.put("/api/payments/:id", upload.single("proof"), async (req, res) => {
     res.status(500).json({ success: false, error: "Server error while updating payment" });
   }
 });
+app.post("/api/customers/:caseId/payment", async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const { totalAmount, advanceAmount, paymentProof } = req.body;
+
+    const customer = await Customer.findById(caseId);
+    if (!customer) {
+      return res.status(404).json({ error: "Case not found" });
+    }
+
+    customer.totalAmount = totalAmount;
+    customer.advanceAmount = advanceAmount;
+    if (paymentProof) customer.paymentProof = paymentProof;
+
+    await customer.save();
+
+    return res.json({ message: "Payment details saved", customer });
+  } catch (err) {
+    console.error("Error saving payment:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 app.delete("/api/payments/:id", async (req, res) => {
   try {
     const payment = await Payment.findByIdAndDelete(req.params.id);
@@ -1530,11 +2140,6 @@ app.get('/api/marketing/stats', async (req, res) => {
     console.error("Admin stats error:", error);
     res.status(500).json({ error: error.message });
   }
-});
-app.use(express.static(path.join(__dirname, '../client/build')));
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

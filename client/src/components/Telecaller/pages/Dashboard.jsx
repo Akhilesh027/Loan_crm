@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "https://crm-backend-k8of.onrender.com/api";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("today-calls");
@@ -165,32 +165,7 @@ const todaysFollowups = callLogs.filter(log => {
           <p className="text-gray-500">{currentDate}</p>
         </div>
         <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4 mt-4 md:mt-0">
-          {/* Bank Selection */}
-          <div className="flex items-center">
-            <select
-              value={bank}
-              onChange={handleBankChange}
-              className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select Bank</option>
-              {bankOptions.map((bankOption, index) => (
-                <option key={index} value={bankOption}>{bankOption}</option>
-              ))}
-            </select>
-            {showOtherBank && (
-              <input
-                type="text"
-                value={otherBankName}
-                onChange={handleOtherBankChange}
-                placeholder="Enter bank name"
-                className="ml-2 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
-            <button onClick={handleBankSubmit} className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-              Set Bank
-            </button>
-          </div>
-          
+      
           <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center">
             <i className="fab fa-whatsapp mr-2"></i>
             Send WhatsApp Updates

@@ -29,11 +29,11 @@ const AdminPaymentsAnalysis = () => {
       try {
         setLoading(true);
 
-        const offersResponse = await fetch("https://crm-backend-k8of.onrender.com/api/offers");
+        const offersResponse = await fetch("http://localhost:5000/api/offers");
         const offersData = await offersResponse.json();
 
         const expensesResponse = await fetch(
-          "https://crm-backend-k8of.onrender.com/api/expenses"
+          "http://localhost:5000/api/expenses"
         );
         const expensesData = await expensesResponse.json();
 
@@ -332,7 +332,7 @@ const AdminPaymentsAnalysis = () => {
               &times;
             </button>
             <img 
-              src={proofModal.url.startsWith("http") ? proofModal.url : `https://crm-backend-k8of.onrender.com/uploads/${proofModal.url}`} 
+              src={proofModal.url.startsWith("http") ? proofModal.url : `http://localhost:5000/uploads/${proofModal.url}`} 
               alt="Payment Proof" 
               className="w-full h-auto rounded" 
             />

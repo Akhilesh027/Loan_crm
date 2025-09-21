@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "https://crm-backend-k8of.onrender.com/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const roles = [
   { key: "telecaller", label: "Telecaller", icon: "fas fa-phone" },

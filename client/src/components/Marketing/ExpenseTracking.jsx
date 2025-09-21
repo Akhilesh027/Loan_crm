@@ -22,7 +22,7 @@ const ExpenseTracking = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`https://crm-backend-k8of.onrender.com/api/expenses/${userId}`, {
+      const res = await fetch(`http://localhost:5000/api/expenses/${userId}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -66,7 +66,7 @@ const ExpenseTracking = () => {
     setSubmitError(null);
 
     try {
-      const res = await fetch("https://crm-backend-k8of.onrender.com/api/expense", {
+      const res = await fetch("http://localhost:5000/api/expense", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -18,7 +18,7 @@ const CustomerList = () => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://crm-backend-k8of.onrender.com/api/customers');
+      const response = await fetch('http://localhost:5000/api/customers');
       if (!response.ok) throw new Error('Failed to fetch customers');
       const data = await response.json();
       setCustomers(data);
@@ -38,7 +38,7 @@ const CustomerList = () => {
     if (!window.confirm('Are you sure you want to delete this customer?')) return;
 
     try {
-      const response = await fetch(`https://crm-backend-k8of.onrender.com/api/customers/${id}`, { method: 'DELETE' });
+      const response = await fetch(`http://localhost:5000/api/customers/${id}`, { method: 'DELETE' });
       if (response.ok) {
         alert('Customer deleted successfully');
         fetchCustomers();
@@ -199,7 +199,7 @@ const CustomerList = () => {
   <label>Aadhaar:</label>
   {selectedCustomer.documents?.aadhaar ? (
     <img
-      src={`https://crm-backend-k8of.onrender.com/uploads/${selectedCustomer.documents.aadhaar}`}
+      src={`http://localhost:5000/uploads/${selectedCustomer.documents.aadhaar}`}
       alt="Aadhaar"
       className="doc-image"
     />
@@ -212,7 +212,7 @@ const CustomerList = () => {
   <label>PAN:</label>
   {selectedCustomer.documents?.pan ? (
     <img
-      src={`https://crm-backend-k8of.onrender.com/uploads/${selectedCustomer.documents.pan}`}
+      src={`http://localhost:5000/uploads/${selectedCustomer.documents.pan}`}
       alt="PAN"
       className="doc-image"
     />
@@ -225,7 +225,7 @@ const CustomerList = () => {
   <label>Account Statement:</label>
   {selectedCustomer.documents?.accountStatement ? (
     <img
-      src={`https://crm-backend-k8of.onrender.com/uploads/${selectedCustomer.documents.accountStatement}`}
+      src={`http://localhost:5000/uploads/${selectedCustomer.documents.accountStatement}`}
       alt="Account Statement"
       className="doc-image"
     />
@@ -238,7 +238,7 @@ const CustomerList = () => {
   <label>Payment Proof:</label>
   {selectedCustomer.documents?.paymentProof ? (
     <img
-      src={`https://crm-backend-k8of.onrender.com/uploads/${selectedCustomer.documents.paymentProof}`}
+      src={`http://localhost:5000/uploads/${selectedCustomer.documents.paymentProof}`}
       alt="Payment Proof"
       className="doc-image"
     />

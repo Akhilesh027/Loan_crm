@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { FaEye, FaUserPlus, FaCheckCircle, FaEdit, FaTimes, FaTrash } from "react-icons/fa";
-
+import { FaEye, FaUserPlus,FaPlus, FaCheckCircle, FaEdit, FaTimes, FaTrash, FaMoneyBillWave, FaPhone, FaHistory } from "react-icons/fa";
+import AddCustomer from "../Telecaller/pages/AddCustomer";
 const statusColors = {
   Solved: "bg-green-100 text-green-800 border border-green-300",
   "In Progress": "bg-yellow-100 text-yellow-800 border border-yellow-300",
   Pending: "bg-red-100 text-red-800 border border-red-300",
+  "Call Back": "bg-blue-100 text-blue-800 border border-blue-300",
+  "Not Reachable": "bg-gray-100 text-gray-800 border border-gray-300",
 };
 
 const DocumentPreview = ({ label, url }) => {
@@ -18,19 +20,19 @@ const DocumentPreview = ({ label, url }) => {
       <p className="font-semibold mb-1">{label}</p>
       {isImage ? (
         <img
-          src={`https://crm-backend-k8of.onrender.com/uploads/${url}`}
+          src={`http://localhost:5000/uploads/${url}`}
           alt={`${label} Document`}
           className="w-full max-w-sm border rounded shadow-sm"
         />
       ) : isPdf ? (
         <iframe
-          src={`https://crm-backend-k8of.onrender.com/uploads/${url}`}
+          src={`http://localhost:5000/uploads/${url}`}
           title={label}
           className="w-full h-48 border rounded shadow-sm"
         />
       ) : (
         <a
-          href={`https://crm-backend-k8of.onrender.com/uploads/${url}`}
+          href={`http://localhost:5000/uploads/${url}`}
           target="_blank"
           rel="noreferrer"
           className="text-indigo-600 underline hover:text-indigo-800"
@@ -85,6 +87,21 @@ const InputField = ({ label, name, value, onChange, type = "text", placeholder, 
   </div>
 );
 
+const TextAreaField = ({ label, name, value, onChange, placeholder, required = false, rows = 3 }) => (
+  <div className="mb-3">
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <textarea
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      required={required}
+      rows={rows}
+      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    />
+  </div>
+);
+
 const AssignedCases = () => {
   const [cases, setCases] = useState([]);
   const [availableOfficers, setAvailableOfficers] = useState([]);
@@ -103,6 +120,61 @@ const AssignedCases = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentCaseId, setPaymentCaseId] = useState(null);
+  const [totalAmount, setTotalAmount] = useState("");
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [paymentProof, setPaymentProof] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callCaseId, setCallCaseId] = useState(null);
+  const [callResponse, setCallResponse] = useState("");
+  const [callStatus, setCallStatus] = useState("Pending");
+  const [nextCallDate, setNextCallDate] = useState("");
+  const [callHistory, setCallHistory] = useState([]);
+  const [showCallHistory, setShowCallHistory] = useState(false);
+  const [showCallOutcomeModal, setShowCallOutcomeModal] = useState(false);
+  const [callOutcome, setCallOutcome] = useState("");
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [notification, setNotification] = useState({ message: '', type: '' });
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: '', type: '' }), 3000);
+  };
+
+  // Add function to open customer modal for adding
+  const openAddCustomerModal = () => {
+    setEditingCustomer(null);
+    setShowCustomerModal(true);
+  };
+
+  // Add function to open customer modal for editing
+  const openEditCustomerModal = (customer) => {
+    setEditingCustomer(customer);
+    setShowCustomerModal(true);
+  };
+
+  // Add function to handle customer modal close
+  const handleCustomerModalClose = () => {
+    setShowCustomerModal(false);
+    setEditingCustomer(null);
+  };
+
+  // Add function to handle customer save/update
+  const handleCustomerSave = (savedCustomer, isNew) => {
+    if (isNew) {
+      // Add new customer to the cases list
+      setCases(prev => [...prev, savedCustomer]);
+      showNotification('Customer added successfully!');
+    } else {
+      // Update existing customer in the cases list
+      setCases(prev => prev.map(c => c._id === savedCustomer._id ? savedCustomer : c));
+      showNotification('Customer updated successfully!');
+    }
+    setShowCustomerModal(false);
+    setEditingCustomer(null);
+  };
 
   useEffect(() => {
     fetchData();
@@ -114,8 +186,8 @@ const AssignedCases = () => {
       setError(null);
 
       const [casesResponse, agentsResponse] = await Promise.all([
-        fetch("https://crm-backend-k8of.onrender.com/api/customers"),
-        fetch("https://crm-backend-k8of.onrender.com/api/users/role?role=agent")
+        fetch("http://localhost:5000/api/customers"),
+        fetch("http://localhost:5000/api/users/role?role=agent")
       ]);
 
       if (!casesResponse.ok) throw new Error("Failed to fetch cases");
@@ -142,12 +214,158 @@ const AssignedCases = () => {
     return matchesStatus && matchesSearch;
   });
 
+  // ----- Call Action -----
+  const openCallModal = (caseId) => {
+    setCallCaseId(caseId);
+    setCallOutcome("");
+    setShowCallOutcomeModal(true);
+  };
+
+  const handleCallOutcome = (outcome) => {
+    setCallOutcome(outcome);
+    setShowCallOutcomeModal(false);
+    
+    const c = cases.find((c) => c._id === callCaseId);
+    setCallResponse("");
+    
+    if (outcome === "success") {
+      setCallStatus("Solved");
+      setShowPaymentModal(true);
+      setPaymentCaseId(callCaseId);
+      setTotalAmount(c.totalAmount || "");
+      setAdvanceAmount(c.advanceAmount || "");
+    } else {
+      setCallStatus(outcome === "callback" ? "Call Back" : "Not Reachable");
+      setShowCallModal(true);
+    }
+  };
+
+  const fetchCallHistory = async (caseId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/customers/${caseId}/call-history`);
+      if (!response.ok) throw new Error("Failed to fetch call history");
+      
+      const data = await response.json();
+      setCallHistory(data.callHistory || []);
+      setShowCallHistory(true);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const saveCallResponse = async () => {
+    if (!callResponse) {
+      setError("Please enter call response");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/customers/${callCaseId}/call`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            response: callResponse, 
+            status: callStatus,
+            nextCallDate: nextCallDate || undefined
+          }),
+        }
+      );
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to save call response");
+
+      setCases((prev) =>
+        prev.map((c) =>
+          c._id === callCaseId ? data.customer : c
+        )
+      );
+      setSuccessMessage("Call response saved successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+      setShowCallModal(false);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ----- Payment Handling -----
+  const handlePaymentProofChange = (e) => {
+    setPaymentProof(e.target.files[0]);
+  };
+
+  const submitPayment = async () => {
+    if (!totalAmount || !advanceAmount) {
+      setError("Please enter both total and advance amounts");
+      return;
+    }
+
+    if (parseFloat(advanceAmount) > parseFloat(totalAmount)) {
+      setError("Advance amount cannot be greater than total amount");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      // If payment proof is uploaded, handle file upload first
+      let paymentProofUrl = "";
+      if (paymentProof) {
+        const formData = new FormData();
+        formData.append("paymentProof", paymentProof);
+        
+        const uploadResponse = await fetch("http://localhost:5000/api/upload/payment-proof", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) throw new Error("Failed to upload payment proof");
+        
+        const uploadData = await uploadResponse.json();
+        paymentProofUrl = uploadData.filename;
+      }
+
+      // Submit payment details
+      const response = await fetch(
+        `http://localhost:5000/api/customers/${paymentCaseId}/payment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            totalAmount, 
+            advanceAmount, 
+            paymentProof: paymentProofUrl 
+          }),
+        }
+      );
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to save payment details");
+
+      setCases((prev) =>
+        prev.map((c) =>
+          c._id === paymentCaseId ? data.customer : c
+        )
+      );
+      setSuccessMessage("Payment details saved successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
+      setShowPaymentModal(false);
+      setUploading(false);
+    } catch (err) {
+      setError(err.message);
+      setUploading(false);
+    }
+  };
+
   // ----- Assign Officer -----
   const openAssignModal = (caseId) => {
     setAssignCaseId(caseId);
     const c = cases.find((c) => c._id === caseId);
     setSelectedOfficer(c.assignedTo || "");
     setEditCase({ ...c });
+    setTotalAmount(c.totalAmount || "");
+    setAdvanceAmount(c.advanceAmount || "");
+    setPaymentProof(null);
     setShowAssignModal(true);
   };
 
@@ -156,21 +374,35 @@ const AssignedCases = () => {
       setError("Please select an officer");
       return;
     }
-    
-    if (!editCase.amount) {
-      setError("Please enter amount before assigning");
-      return;
-    }
 
     try {
+      // If payment proof is uploaded, handle file upload first
+      let paymentProofUrl = "";
+      if (paymentProof) {
+        const formData = new FormData();
+        formData.append("paymentProof", paymentProof);
+        
+        const uploadResponse = await fetch("http://localhost:5000/api/upload/payment-proof", {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) throw new Error("Failed to upload payment proof");
+        
+        const uploadData = await uploadResponse.json();
+        paymentProofUrl = uploadData.filename;
+      }
+
       const response = await fetch(
-        `https://crm-backend-k8of.onrender.com/api/customers/${assignCaseId}/assign`,
+        `http://localhost:5000/api/customers/${assignCaseId}/assign`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             agentId: selectedOfficer,
-            amount: editCase.amount,
+            totalAmount: totalAmount || undefined,
+            advanceAmount: advanceAmount || undefined,
+            paymentProof: paymentProofUrl || undefined
           }),
         }
       );
@@ -180,7 +412,7 @@ const AssignedCases = () => {
 
       setCases((prev) =>
         prev.map((c) =>
-          c._id === assignCaseId ? { ...data.customer, amount: editCase.amount } : c
+          c._id === assignCaseId ? data.customer : c
         )
       );
       setSuccessMessage("Officer assigned successfully!");
@@ -208,7 +440,7 @@ const AssignedCases = () => {
 
     try {
       const response = await fetch(
-        `https://crm-backend-k8of.onrender.com/api/customers/${completeCaseId}/complete`,
+        `http://localhost:5000/api/customers/${completeCaseId}/complete`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -244,7 +476,7 @@ const AssignedCases = () => {
   const saveEditedCase = async () => {
     try {
       const response = await fetch(
-        `https://crm-backend-k8of.onrender.com/api/customers/${editCase._id}/update`,
+        `http://localhost:5000/api/customers/${editCase._id}/update`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -322,7 +554,12 @@ const AssignedCases = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
+           <button 
+          onClick={openAddCustomerModal}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center"
+        >
+          <FaPlus className="mr-2" /> Add Customer
+        </button>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Status Filter</label>
             <select
@@ -334,6 +571,8 @@ const AssignedCases = () => {
               <option value="Pending">Pending</option>
               <option value="In Progress">In Progress</option>
               <option value="Solved">Solved</option>
+              <option value="Call Back">Call Back</option>
+              <option value="Not Reachable">Not Reachable</option>
             </select>
           </div>
           
@@ -373,6 +612,8 @@ const AssignedCases = () => {
               ) : (
                 filteredCases.map((c) => {
                   const officer = c.assignedTo && availableOfficers.find((o) => o._id === c.assignedTo);
+                  const hasPaymentDetails = c.totalAmount && c.advanceAmount;
+                  
                   return (
                     <tr key={c._id} className="hover:bg-gray-50">
                       <td className="p-3">{c.caseId || `CASE-${c._id.slice(-4).toUpperCase()}`}</td>
@@ -399,6 +640,23 @@ const AssignedCases = () => {
                             <FaEye />
                           </button>
                           
+                          <button
+                            onClick={() => openCallModal(c._id)}
+                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
+                            title="Log Call"
+                          >
+                            <FaPhone />
+                          </button>
+                           
+          
+                          <button
+                            onClick={() => fetchCallHistory(c._id)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                            title="Call History"
+                          >
+                            <FaHistory />
+                          </button>
+                          
                           {!c.assignedTo && c.status !== "Solved" && (
                             <button
                               onClick={() => openAssignModal(c._id)}
@@ -412,20 +670,35 @@ const AssignedCases = () => {
                           {c.status !== "Solved" && c.assignedTo && (
                             <button
                               onClick={() => openCompleteModal(c._id)}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
+                              className="p-2 text-teal-600 hover:bg-teal-100 rounded-full transition-colors"
                               title="Complete Case"
                             >
                               <FaCheckCircle />
                             </button>
                           )}
                           
+                          {c.status === "Solved" && !hasPaymentDetails && (
+                            <button
+                              onClick={() => {
+                                setPaymentCaseId(c._id);
+                                setTotalAmount(c.totalAmount || "");
+                                setAdvanceAmount(c.advanceAmount || "");
+                                setShowPaymentModal(true);
+                              }}
+                              className="p-2 text-purple-600 hover:bg-purple-100 rounded-full transition-colors"
+                              title="Add Payment Details"
+                            >
+                              <FaMoneyBillWave />
+                            </button>
+                          )}
+                          
                           <button
-                            onClick={() => openEditModal(c)}
-                            className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-full transition-colors"
-                            title="Edit Case"
-                          >
-                            <FaEdit />
-                          </button>
+            onClick={() => openEditCustomerModal(c)}
+            className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-full transition-colors"
+            title="Edit Customer"
+          >
+            <FaEdit />
+          </button>
                         </div>
                       </td>
                     </tr>
@@ -438,11 +711,151 @@ const AssignedCases = () => {
       </div>
 
       {/* Modals */}
+      {/* Call Outcome Modal */}
+      <Modal 
+        isOpen={showCallOutcomeModal} 
+        onClose={() => setShowCallOutcomeModal(false)} 
+        title="Call Outcome"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700">What was the outcome of the call?</p>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <button 
+              onClick={() => handleCallOutcome("success")}
+              className="px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+            >
+              Successful
+            </button>
+            
+            <button 
+              onClick={() => handleCallOutcome("callback")}
+              className="px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Call Back Needed
+            </button>
+            
+            <button 
+              onClick={() => handleCallOutcome("notreachable")}
+              className="px-4 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors col-span-2"
+            >
+              Not Reachable
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Call Modal */}
+      <Modal 
+        isOpen={showCallModal} 
+        onClose={() => setShowCallModal(false)} 
+        title="Log Call Response"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Update Status</label>
+            <select
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={callStatus}
+              onChange={(e) => setCallStatus(e.target.value)}
+            >
+              <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Solved">Solved</option>
+              <option value="Call Back">Call Back</option>
+              <option value="Not Reachable">Not Reachable</option>
+            </select>
+          </div>
+          
+          <TextAreaField
+            label="Call Response"
+            name="callResponse"
+            value={callResponse}
+            onChange={(e) => setCallResponse(e.target.value)}
+            placeholder="Enter details of the call response..."
+            required
+            rows={4}
+          />
+          
+          {callStatus === "Call Back" && (
+            <InputField
+              label="Next Call Date"
+              name="nextCallDate"
+              type="datetime-local"
+              value={nextCallDate}
+              onChange={(e) => setNextCallDate(e.target.value)}
+            />
+          )}
+          
+          <div className="flex justify-end space-x-3 pt-4">
+            <button 
+              onClick={() => setShowCallModal(false)} 
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={saveCallResponse} 
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Save Call Response
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Call History Modal */}
+      <Modal 
+        isOpen={showCallHistory} 
+        onClose={() => setShowCallHistory(false)} 
+        title="Call History"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {callHistory.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No call history found</p>
+          ) : (
+            <div className="space-y-3">
+              {callHistory.map((call, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium">{call.response}</p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Status: <span className={`px-2 py-1 rounded-full text-xs ${statusColors[call.status] || "bg-gray-100"}`}>
+                          {call.status}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">
+                        {new Date(call.timestamp).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(call.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  {call.nextCallDate && (
+                    <p className="text-sm text-blue-600 mt-2">
+                      Next call: {new Date(call.nextCallDate).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
       {/* Assign Modal */}
       <Modal 
         isOpen={showAssignModal} 
         onClose={() => setShowAssignModal(false)} 
         title="Assign Officer"
+        size="lg"
       >
         <div className="space-y-4">
           <div>
@@ -459,15 +872,42 @@ const AssignedCases = () => {
             </select>
           </div>
           
-          <InputField
-            label="Amount"
-            name="amount"
-            type="number"
-            value={editCase?.amount || ""}
-            onChange={(e) => setEditCase({...editCase, amount: e.target.value})}
-            placeholder="Enter amount"
-            required
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField
+              label="Total Amount (₹)"
+              name="totalAmount"
+              type="number"
+              value={totalAmount}
+              onChange={(e) => setTotalAmount(e.target.value)}
+              placeholder="Enter total amount"
+            />
+            
+            <InputField
+              label="Advance Amount (₹)"
+              name="advanceAmount"
+              type="number"
+              value={advanceAmount}
+              onChange={(e) => setAdvanceAmount(e.target.value)}
+              placeholder="Enter advance amount"
+            />
+          </div>
+          
+          {totalAmount && advanceAmount && (
+            <div className="bg-gray-50 p-3 rounded-md">
+              <p className="text-sm font-medium">Pending Amount: ₹{parseFloat(totalAmount - advanceAmount).toFixed(2)}</p>
+            </div>
+          )}
+          
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Proof</label>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.pdf"
+              onChange={handlePaymentProofChange}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">Upload proof of payment (JPG, PNG, or PDF)</p>
+          </div>
           
           <div className="flex justify-end space-x-3 pt-4">
             <button 
@@ -522,9 +962,71 @@ const AssignedCases = () => {
             </button>
             <button 
               onClick={completeCase} 
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
             >
               Complete Case
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal 
+        isOpen={showPaymentModal} 
+        onClose={() => setShowPaymentModal(false)} 
+        title="Add Payment Details"
+      >
+        <div className="space-y-4">
+          <InputField
+            label="Total Amount (₹)"
+            name="totalAmount"
+            type="number"
+            value={totalAmount}
+            onChange={(e) => setTotalAmount(e.target.value)}
+            placeholder="Enter total amount"
+            required
+          />
+          
+          <InputField
+            label="Advance Amount (₹)"
+            name="advanceAmount"
+            type="number"
+            value={advanceAmount}
+            onChange={(e) => setAdvanceAmount(e.target.value)}
+            placeholder="Enter advance amount"
+            required
+          />
+          
+          {totalAmount && advanceAmount && (
+            <div className="bg-gray-50 p-3 rounded-md">
+              <p className="text-sm font-medium">Pending Amount: ₹{parseFloat(totalAmount - advanceAmount).toFixed(2)}</p>
+            </div>
+          )}
+          
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Proof</label>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.pdf"
+              onChange={handlePaymentProofChange}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">Upload proof of payment (JPG, PNG, or PDF)</p>
+          </div>
+          
+          <div className="flex justify-end space-x-3 pt-4">
+            <button 
+              onClick={() => setShowPaymentModal(false)} 
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={submitPayment} 
+              disabled={uploading}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
+            >
+              {uploading ? "Processing..." : "Save Payment Details"}
             </button>
           </div>
         </div>
@@ -637,10 +1139,10 @@ const AssignedCases = () => {
         isOpen={!!selectedCase} 
         onClose={() => setSelectedCase(null)} 
         title="Case Details"
-        size="lg"
+        size="xl"
       >
         {selectedCase && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Name</p>
@@ -680,27 +1182,139 @@ const AssignedCases = () => {
               </div>
               
               <div>
-                <p className="text-sm text-gray-600">Amount</p>
-                <p className="font-medium">{selectedCase.amount ? `₹${selectedCase.amount}` : "-"}</p>
+                <p className="text-sm text-gray-600">Case ID</p>
+                <p className="font-medium">{selectedCase.caseId || "-"}</p>
               </div>
               
               <div>
-                <p className="text-sm text-gray-600">CIBIL Before</p>
-                <p className="font-medium">{selectedCase.cibilBefore || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">CIBIL After</p>
-                <p className="font-medium">{selectedCase.cibilAfter || "-"}</p>
+                <p className="text-sm text-gray-600">Priority</p>
+                <p className="font-medium">{selectedCase.priority || "-"}</p>
               </div>
             </div>
             
-            {selectedCase.documents && selectedCase.documents.length > 0 && (
-              <div className="pt-4">
-                <h4 className="font-medium text-gray-700 mb-2">Documents</h4>
-                <div className="space-y-4">
-                  {selectedCase.documents.map((doc, i) => (
-                    <DocumentPreview key={i} label={`Document ${i+1}`} url={doc} />
+            {/* Payment Details Section */}
+            {(selectedCase.totalAmount || selectedCase.advanceAmount) && (
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                  <FaMoneyBillWave className="mr-2" /> Payment Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-green-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-600">Total Amount</p>
+                    <p className="font-medium text-green-700">₹{selectedCase.totalAmount || "0"}</p>
+                  </div>
+                  
+                  <div className="bg-blue-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-600">Advance Paid</p>
+                    <p className="font-medium text-blue-700">₹{selectedCase.advanceAmount || "0"}</p>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-3 rounded-md">
+                    <p className="text-sm text-gray-600">Pending Amount</p>
+                    <p className="font-medium text-orange-700">
+                      ₹{(selectedCase.totalAmount - selectedCase.advanceAmount).toFixed(2) || "0"}
+                    </p>
+                  </div>
+                </div>
+                
+                {selectedCase.paymentProof && (
+                  <div className="mt-4">
+                    <DocumentPreview label="Payment Proof" url={selectedCase.paymentProof} />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Banking Details Table */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="font-medium text-gray-700 mb-3">Banking Details</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
+                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Number</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedCase.banks && selectedCase.banks.length > 0 ? (
+                      selectedCase.banks.map((bank, index) => (
+                        <tr key={index}>
+                          <td className="py-2 px-4">{bank}</td>
+                          <td className="py-2 px-4">
+                            {selectedCase.accountNumbers && selectedCase.accountNumbers[bank]
+                              ? selectedCase.accountNumbers[bank]
+                              : selectedCase.accountNumber || "N/A"}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="py-2 px-4" colSpan="2">
+                          {selectedCase.bank ? (
+                            <>
+                              <div className="font-medium">{selectedCase.bank}</div>
+                              {selectedCase.accountNumber && (
+                                <div className="text-sm text-gray-600">Account: {selectedCase.accountNumber}</div>
+                              )}
+                            </>
+                          ) : (
+                            "No banking details available"
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            {/* Issues Section */}
+            {selectedCase.issues && selectedCase.issues.length > 0 && (
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-700 mb-2">Reported Issues</h4>
+                <ul className="list-disc pl-5">
+                  {selectedCase.issues.map((issue, index) => (
+                    <li key={index} className="text-sm text-gray-700 mb-1">{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Documents Section */}
+            {selectedCase.documents && (
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-700 mb-3">Documents</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedCase.documents.aadhaar && (
+                    <DocumentPreview label="Aadhaar Card" url={selectedCase.documents.aadhaar} />
+                  )}
+                  {selectedCase.documents.pan && (
+                    <DocumentPreview label="PAN Card" url={selectedCase.documents.pan} />
+                  )}
+                  {selectedCase.documents.accountStatement && (
+                    <DocumentPreview label="Account Statement" url={selectedCase.documents.accountStatement} />
+                  )}
+                  {selectedCase.documents.paymentProof && (
+                    <DocumentPreview label="Payment Proof" url={selectedCase.documents.paymentProof} />
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Notes Section */}
+            {selectedCase.notes && selectedCase.notes.length > 0 && (
+              <div className="pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
+                <div className="space-y-3">
+                  {selectedCase.notes.map((note, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-md">
+                      <p className="text-sm text-gray-700">{note.content}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(note.addedAt).toLocaleString()}
+                        {note.addedBy && ` • By ${note.addedBy}`}
+                      </p>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -708,7 +1322,18 @@ const AssignedCases = () => {
           </div>
         )}
       </Modal>
+           {showCustomerModal && (
+        <AddCustomer
+          isOpen={showCustomerModal}
+          onClose={handleCustomerModalClose}
+          prefill={editingCustomer || {}}
+          notify={showNotification}
+          onSave={handleCustomerSave}
+          isEditMode={!!editingCustomer}
+        />
+      )}
     </div>
+    
   );
 };
 

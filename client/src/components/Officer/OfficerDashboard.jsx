@@ -24,7 +24,7 @@ const officerId = localStorage.getItem("userId");
     if (!officerId) return;
 
     axios
-      .get(`https://crm-backend-k8of.onrender.com/api/agent/stats/${officerId}`)
+      .get(`http://localhost:5000/api/agent/stats/${officerId}`)
       .then((res) => {
         setStats(res.data.stats || []);
         setRecentCases(res.data.recentCases || []);

@@ -30,7 +30,7 @@ const handleFileChange = (e) => {
 
   const fetchAssignedCases = async () => {
     try {
-      const response = await fetch(`https://crm-backend-k8of.onrender.com/api/customers/assigned/${userId}`, {
+      const response = await fetch(`http://localhost:5000/api/customers/assigned/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -55,7 +55,7 @@ const handleFileChange = (e) => {
   const fetchOffers = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`https://crm-backend-k8of.onrender.com/api/offers/${userId}`, {
+      const response = await fetch(`http://localhost:5000/api/offers/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -100,7 +100,7 @@ const handleSubmitOffer = async (e) => {
       formData.append("paymentProof", paymentProof);
     }
 
-    const response = await fetch("https://crm-backend-k8of.onrender.com/api/offers", {
+    const response = await fetch("http://localhost:5000/api/offers", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -134,7 +134,7 @@ const handleSubmitOffer = async (e) => {
 
   const updateOffer = async (offerId, updates) => {
     try {
-      const response = await fetch(`https://crm-backend-k8of.onrender.com/api/offers/${offerId}`, {
+      const response = await fetch(`http://localhost:5000/api/offers/${offerId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -164,7 +164,7 @@ const handleSubmitOffer = async (e) => {
     if (!window.confirm("Are you sure you want to delete this offer?")) return;
     
     try {
-      const response = await fetch(`https://crm-backend-k8of.onrender.com/api/offers/${offerId}`, {
+      const response = await fetch(`http://localhost:5000/api/offers/${offerId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

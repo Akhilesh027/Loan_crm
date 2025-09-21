@@ -113,3 +113,267 @@ label {
     padding: 10px;
   }
 }
+
+.add-customer-container {
+  padding: 1rem;
+  max-width: 900px;
+  margin: auto;
+  font-family: Arial, sans-serif;
+  background-color: #f9f9f9;
+}
+
+.page-title {
+  margin-bottom: 1rem;
+}
+
+.telecaller-info {
+  font-size: 0.9rem;
+  color: #555;
+  margin-top: 0.2rem;
+}
+
+.card {
+  background: white;
+  border-radius: 6px;
+  padding: 1.5rem;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.card-title {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  color: #888;
+  padding: 0 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+input[type="number"],
+input[type="file"],
+select,
+textarea,
+button.dropdown-toggle {
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="tel"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus,
+button.dropdown-toggle:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.error {
+  border-color: #dc3545 !important;
+}
+
+.error-text {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.5rem;
+  max-height: 150px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.dropdown-checkboxes {
+  position: relative;
+}
+
+.dropdown-toggle {
+  cursor: pointer;
+  text-align: left;
+  background-color: white;
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  border-radius: 4px;
+  width: 100%;
+}
+
+.dropdown-menu {
+  position: absolute;
+  z-index: 10;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.dropdown-menu label {
+  display: block;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.dropdown-menu label:hover {
+  background-color: #f0f0f0;
+}
+
+/* Custom field rows */
+.custom-field-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.custom-field-row input[type="text"],
+.custom-field-row select,
+.custom-field-row input[type="number"],
+.custom-field-row input[type="date"],
+.custom-field-row input[type="email"],
+.custom-field-row textarea {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+
+.custom-field-row textarea {
+  height: 60px;
+  resize: vertical;
+}
+
+.custom-field-row .btn {
+  flex: 0 0 auto;
+  height: 30px;
+  margin-top: 1.75rem;
+}
+
+.other-bank-input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.account-number-input-group {
+  margin-bottom: 0.5rem;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  color: #444;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Buttons styling */
+.btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:disabled {
+  background-color: #7abaff;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 640px) {
+  .form-row {
+    flex-direction: column;
+  }
+  .custom-field-row {
+    flex-direction: column;
+  }
+  .other-bank-input-group {
+    flex-direction: column;
+  }
+}
