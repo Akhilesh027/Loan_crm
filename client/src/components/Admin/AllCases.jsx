@@ -294,68 +294,54 @@ const AssignedCases = () => {
     setPaymentProof(e.target.files[0]);
   };
 
-  const submitPayment = async () => {
-    if (!totalAmount || !advanceAmount) {
-      setError("Please enter both total and advance amounts");
-      return;
+const submitPayment = async () => {
+  if (!totalAmount || !advanceAmount) {
+    setError("Please enter both total and advance amounts");
+    return;
+  }
+
+  if (parseFloat(advanceAmount) > parseFloat(totalAmount)) {
+    setError("Advance amount cannot be greater than total amount");
+    return;
+  }
+
+  try {
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("totalAmount", totalAmount.toString());
+    formData.append("advanceAmount", advanceAmount.toString());
+
+    if (paymentProof) {
+      formData.append("paymentProof", paymentProof);
     }
 
-    if (parseFloat(advanceAmount) > parseFloat(totalAmount)) {
-      setError("Advance amount cannot be greater than total amount");
-      return;
-    }
-
-    try {
-      setUploading(true);
-      
-      // If payment proof is uploaded, handle file upload first
-      let paymentProofUrl = "";
-      if (paymentProof) {
-        const formData = new FormData();
-        formData.append("paymentProof", paymentProof);
-        
-        const uploadResponse = await fetch("http://localhost:5000/api/upload/payment-proof", {
-          method: "POST",
-          body: formData,
-        });
-        
-        if (!uploadResponse.ok) throw new Error("Failed to upload payment proof");
-        
-        const uploadData = await uploadResponse.json();
-        paymentProofUrl = uploadData.filename;
+    const response = await fetch(
+      `http://localhost:5000/api/customers/${paymentCaseId}/payment`,
+      {
+        method: "POST",
+        body: formData, // multipart/form-data automatically set
       }
+    );
 
-      // Submit payment details
-      const response = await fetch(
-        `http://localhost:5000/api/customers/${paymentCaseId}/payment`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            totalAmount, 
-            advanceAmount, 
-            paymentProof: paymentProofUrl 
-          }),
-        }
-      );
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to save payment details");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to save payment details");
 
-      setCases((prev) =>
-        prev.map((c) =>
-          c._id === paymentCaseId ? data.customer : c
-        )
-      );
-      setSuccessMessage("Payment details saved successfully!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-      setShowPaymentModal(false);
-      setUploading(false);
-    } catch (err) {
-      setError(err.message);
-      setUploading(false);
-    }
-  };
+    setCases((prev) =>
+      prev.map((c) => (c._id === paymentCaseId ? data.customer : c))
+    );
+
+    setSuccessMessage("Payment details saved successfully!");
+    setTimeout(() => setSuccessMessage(""), 3000);
+    setShowPaymentModal(false);
+    setUploading(false);
+  } catch (err) {
+    setError(err.message);
+    setUploading(false);
+  }
+};
+
+
 
   // ----- Assign Officer -----
   const openAssignModal = (caseId) => {
@@ -369,59 +355,44 @@ const AssignedCases = () => {
     setShowAssignModal(true);
   };
 
-  const assignOfficer = async () => {
-    if (!selectedOfficer) {
-      setError("Please select an officer");
-      return;
+const assignOfficer = async () => {
+  if (!selectedOfficer) {
+    setError("Please select an officer");
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append("agentId", selectedOfficer);
+    formData.append("totalAmount", totalAmount ? totalAmount.toString() : "0");
+    formData.append("advanceAmount", advanceAmount ? advanceAmount.toString() : "0");
+    if (paymentProof) {
+      formData.append("agentPaymentProof", paymentProof);
     }
 
-    try {
-      // If payment proof is uploaded, handle file upload first
-      let paymentProofUrl = "";
-      if (paymentProof) {
-        const formData = new FormData();
-        formData.append("paymentProof", paymentProof);
-        
-        const uploadResponse = await fetch("http://localhost:5000/api/upload/payment-proof", {
-          method: "POST",
-          body: formData,
-        });
-        
-        if (!uploadResponse.ok) throw new Error("Failed to upload payment proof");
-        
-        const uploadData = await uploadResponse.json();
-        paymentProofUrl = uploadData.filename;
+    const response = await fetch(
+      `http://localhost:5000/api/customers/${assignCaseId}/assign`,
+      {
+        method: "POST",
+        body: formData, // Content-Type is automatically set with multipart/form-data boundary
       }
+    );
 
-      const response = await fetch(
-        `http://localhost:5000/api/customers/${assignCaseId}/assign`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agentId: selectedOfficer,
-            totalAmount: totalAmount || undefined,
-            advanceAmount: advanceAmount || undefined,
-            paymentProof: paymentProofUrl || undefined
-          }),
-        }
-      );
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to assign case");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to assign case");
 
-      setCases((prev) =>
-        prev.map((c) =>
-          c._id === assignCaseId ? data.customer : c
-        )
-      );
-      setSuccessMessage("Officer assigned successfully!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-      setShowAssignModal(false);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+    setCases((prev) =>
+      prev.map((c) => (c._id === assignCaseId ? data.customer : c))
+    );
+    setSuccessMessage("Officer assigned successfully!");
+    setTimeout(() => setSuccessMessage(""), 3000);
+    setShowAssignModal(false);
+  } catch (err) {
+    setError(err.message);
+  }
+};
+
+
 
   // ----- Complete Case -----
   const openCompleteModal = (caseId) => {
@@ -1135,193 +1106,236 @@ const AssignedCases = () => {
       </Modal>
 
       {/* View Modal */}
-      <Modal 
-        isOpen={!!selectedCase} 
-        onClose={() => setSelectedCase(null)} 
-        title="Case Details"
-        size="xl"
-      >
-        {selectedCase && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Name</p>
-                <p className="font-medium">{selectedCase.name}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Phone</p>
-                <p className="font-medium">{selectedCase.phone || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Email</p>
-                <p className="font-medium">{selectedCase.email || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Status</p>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[selectedCase.status]}`}>
-                  {selectedCase.status}
-                </span>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Problem</p>
-                <p className="font-medium">{selectedCase.problem}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Bank</p>
-                <p className="font-medium">{selectedCase.bank || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Loan Type</p>
-                <p className="font-medium">{selectedCase.loanType || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Case ID</p>
-                <p className="font-medium">{selectedCase.caseId || "-"}</p>
-              </div>
-              
-              <div>
-                <p className="text-sm text-gray-600">Priority</p>
-                <p className="font-medium">{selectedCase.priority || "-"}</p>
-              </div>
-            </div>
-            
-            {/* Payment Details Section */}
-            {(selectedCase.totalAmount || selectedCase.advanceAmount) && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
-                  <FaMoneyBillWave className="mr-2" /> Payment Details
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-green-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="font-medium text-green-700">₹{selectedCase.totalAmount || "0"}</p>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Advance Paid</p>
-                    <p className="font-medium text-blue-700">₹{selectedCase.advanceAmount || "0"}</p>
-                  </div>
-                  
-                  <div className="bg-orange-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Pending Amount</p>
-                    <p className="font-medium text-orange-700">
-                      ₹{(selectedCase.totalAmount - selectedCase.advanceAmount).toFixed(2) || "0"}
-                    </p>
-                  </div>
-                </div>
-                
-                {selectedCase.paymentProof && (
-                  <div className="mt-4">
-                    <DocumentPreview label="Payment Proof" url={selectedCase.paymentProof} />
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* Banking Details Table */}
-            <div className="pt-4 border-t border-gray-200">
-              <h4 className="font-medium text-gray-700 mb-3">Banking Details</h4>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
-                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Number</th>
+     <Modal 
+  isOpen={!!selectedCase} 
+  onClose={() => setSelectedCase(null)} 
+  title="Case Details"
+  size="xl"
+>
+  {selectedCase && (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <p className="text-sm text-gray-600">Name</p>
+          <p className="font-medium">{selectedCase.name}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Phone</p>
+          <p className="font-medium">{selectedCase.phone || "-"}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Email</p>
+          <p className="font-medium">{selectedCase.email || "-"}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Status</p>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[selectedCase.status]}`}>
+            {selectedCase.status}
+          </span>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Problem</p>
+          <p className="font-medium">{selectedCase.problem}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Case ID</p>
+          <p className="font-medium">{selectedCase.caseId || "-"}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-600">Priority</p>
+          <p className="font-medium">{selectedCase.priority || "-"}</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-600">pageNumber</p>
+          <p className="font-medium">{selectedCase.pageNumber || "-"}</p>
+        </div>
+        {/* Telecaller Details */}
+        <div>
+          <p className="text-sm text-gray-600">Telecaller Name</p>
+          <p className="font-medium">{selectedCase.telecallerName || "-"}</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-600">Telecaller ID</p>
+          <p className="font-medium">{selectedCase.telecallerId || "-"}</p>
+        </div>
+
+      </div>
+  
+      {/* Payment Details Section */}
+     {(selectedCase.totalAmount || selectedCase.advanceAmount) && (
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+            <FaMoneyBillWave className="mr-2" /> Total Payment Details
+          </h4>
+          <table className="min-w-full bg-white border border-gray-300 rounded-md">
+            <tbody>
+              <tr className="border-b">
+                <td className="py-2 px-4 font-medium">Total Amount</td>
+                <td className="py-2 px-4">₹{selectedCase.totalAmount || "0"}</td>
+              </tr>
+              <tr className="border-b bg-gray-50">
+                <td className="py-2 px-4 font-medium">Advance Paid</td>
+                <td className="py-2 px-4">₹{selectedCase.advanceAmount || "0"}</td>
+              </tr>
+              <tr>
+                <td className="py-2 px-4 font-medium">Pending Amount</td>
+                <td className="py-2 px-4">
+                  ₹{((selectedCase.totalAmount || 0) - (selectedCase.advanceAmount || 0)).toFixed(2)}
+                </td>
+              </tr>
+              {selectedCase.paymentProof && (
+                <tr>
+                  <td className="py-2 px-4 font-medium">Payment Proof</td>
+                  <td className="py-2 px-4">
+                    <DocumentPreview label="Total Payment Proof" url={selectedCase.paymentProof} />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Agent Payment Details Section */}
+      {(selectedCase.agentTotalAmount || selectedCase.agentAdvanceAmount) && (
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+            <FaUserPlus className="mr-2" /> Agent Payment Details
+          </h4>
+          <table className="min-w-full bg-white border border-gray-300 rounded-md">
+            <tbody>
+              <tr className="border-b">
+                <td className="py-2 px-4 font-medium">Agent Total Amount</td>
+                <td className="py-2 px-4">₹{selectedCase.agentTotalAmount || "0"}</td>
+              </tr>
+              <tr className="border-b bg-gray-50">
+                <td className="py-2 px-4 font-medium">Agent Advance Paid</td>
+                <td className="py-2 px-4">₹{selectedCase.agentAdvanceAmount || "0"}</td>
+              </tr>
+              <tr>
+                <td className="py-2 px-4 font-medium">Agent Pending Amount</td>
+                <td className="py-2 px-4">
+                  ₹{((selectedCase.agentTotalAmount || 0) - (selectedCase.agentAdvanceAmount || 0)).toFixed(2)}
+                </td>
+              </tr>
+              {selectedCase.agentPaymentProof && (
+                <tr>
+                  <td className="py-2 px-4 font-medium">Agent Payment Proof</td>
+                  <td className="py-2 px-4">
+                    <DocumentPreview label="Agent Payment Proof" url={selectedCase.agentPaymentProof} />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Banking Details Table with Loan Type and Issues */}
+      <div className="pt-4 border-t border-gray-200">
+        <h4 className="font-medium text-gray-700 mb-3">Banking Details</h4>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-200">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
+                <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Number</th>
+                <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loan Type</th>
+                <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {selectedCase.banks && selectedCase.banks.length > 0 ? (
+                selectedCase.banks.map((bank, index) => {
+                  const bankDetail = selectedCase.bankDetails?.[bank] || {};
+                  return (
+                    <tr key={index}>
+                      <td className="py-2 px-4">{bank}</td>
+                      <td className="py-2 px-4">{bankDetail.accountNumber || 'N/A'}</td>
+                      <td className="py-2 px-4">{bankDetail.loanType || 'N/A'}</td>
+                      <td className="py-2 px-4">
+                        {bankDetail.issues && bankDetail.issues.length > 0
+                          ? bankDetail.issues.join(", ")
+                          : "No issues reported"}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {selectedCase.banks && selectedCase.banks.length > 0 ? (
-                      selectedCase.banks.map((bank, index) => (
-                        <tr key={index}>
-                          <td className="py-2 px-4">{bank}</td>
-                          <td className="py-2 px-4">
-                            {selectedCase.accountNumbers && selectedCase.accountNumbers[bank]
-                              ? selectedCase.accountNumbers[bank]
-                              : selectedCase.accountNumber || "N/A"}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-2 px-4" colSpan="2">
-                          {selectedCase.bank ? (
-                            <>
-                              <div className="font-medium">{selectedCase.bank}</div>
-                              {selectedCase.accountNumber && (
-                                <div className="text-sm text-gray-600">Account: {selectedCase.accountNumber}</div>
-                              )}
-                            </>
-                          ) : (
-                            "No banking details available"
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            
-            {/* Issues Section */}
-            {selectedCase.issues && selectedCase.issues.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-2">Reported Issues</h4>
-                <ul className="list-disc pl-5">
-                  {selectedCase.issues.map((issue, index) => (
-                    <li key={index} className="text-sm text-gray-700 mb-1">{issue}</li>
-                  ))}
-                </ul>
-              </div>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td className="py-2 px-4" colSpan="4">
+                    No banking details available
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Issues Section */}
+      {selectedCase.issues && selectedCase.issues.length > 0 && (
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-700 mb-2">Reported Issues</h4>
+          <ul className="list-disc pl-5">
+            {selectedCase.issues.map((issue, index) => (
+              <li key={index} className="text-sm text-gray-700 mb-1">{issue}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Documents Section */}
+      {selectedCase.documents && (
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-700 mb-3">Documents</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {selectedCase.documents.aadhaarDoc && (
+              <DocumentPreview label="Aadhaar Card" url={selectedCase.documents.aadhaarDoc} />
             )}
-            
-            {/* Documents Section */}
-            {selectedCase.documents && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-3">Documents</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedCase.documents.aadhaar && (
-                    <DocumentPreview label="Aadhaar Card" url={selectedCase.documents.aadhaar} />
-                  )}
-                  {selectedCase.documents.pan && (
-                    <DocumentPreview label="PAN Card" url={selectedCase.documents.pan} />
-                  )}
-                  {selectedCase.documents.accountStatement && (
-                    <DocumentPreview label="Account Statement" url={selectedCase.documents.accountStatement} />
-                  )}
-                  {selectedCase.documents.paymentProof && (
-                    <DocumentPreview label="Payment Proof" url={selectedCase.documents.paymentProof} />
-                  )}
-                </div>
-              </div>
+            {selectedCase.documents.panDoc && (
+              <DocumentPreview label="PAN Card" url={selectedCase.documents.panDoc} />
             )}
-            
-            {/* Notes Section */}
-            {selectedCase.notes && selectedCase.notes.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
-                <div className="space-y-3">
-                  {selectedCase.notes.map((note, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-700">{note.content}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(note.addedAt).toLocaleString()}
-                        {note.addedBy && ` • By ${note.addedBy}`}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {selectedCase.documents.accountStatementDoc && (
+              <DocumentPreview label="Account Statement" url={selectedCase.documents.accountStatementDoc} />
+            )}
+            {selectedCase.documents.additionalDoc && (
+              <DocumentPreview label="Additional Document" url={selectedCase.documents.additionalDoc} />
+            )}
+            {selectedCase.documents.paymentProof && (
+              <DocumentPreview label="Payment Proof" url={selectedCase.documents.paymentProof} />
             )}
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
+
+      {/* Notes Section */}
+      {selectedCase.notes && selectedCase.notes.length > 0 && (
+        <div className="pt-4 border-t border-gray-200">
+          <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
+          <div className="space-y-3">
+            {selectedCase.notes.map((note, index) => (
+              <div key={index} className="bg-gray-50 p-3 rounded-md">
+                <p className="text-sm text-gray-700">{note.content}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {new Date(note.addedAt).toLocaleString()}
+                  {note.addedBy && ` • By ${note.addedBy}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+</Modal>
+
            {showCustomerModal && (
         <AddCustomer
           isOpen={showCustomerModal}

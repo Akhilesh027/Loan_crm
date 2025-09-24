@@ -67,48 +67,7 @@ const officerId = localStorage.getItem("userId");
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-gray-700">
-            <thead className="bg-gray-100 uppercase text-sm text-gray-600">
-              <tr>
-                {["Case ID", "Customer", "Problem", "Assigned Date", "Days Count", "Status", "Action"].map(
-                  (h) => (
-                    <th key={h} className="py-3 px-6">
-                      {h}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {recentCases.map(
-                ({ caseId, customer, problem, assignedDate, status, daysCount }, idx) => (
-                  <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                    <td className="py-3 px-6">{caseId}</td>
-                    <td className="py-3 px-6">{customer}</td>
-                    <td className="py-3 px-6">{problem}</td>
-                    <td className="py-3 px-6">{assignedDate}</td>
-                    <td className="py-3 px-6">{daysCount}</td>
-                    <td className="py-3 px-6">
-                      <span
-                        className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
-                          statusColors[status] || "bg-gray-300 text-gray-800"
-                        }`}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-6">
-                      <button className="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 text-sm">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
-        </div>
+        
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 const RequestTable = () => {
   const [requests, setRequests] = useState([]);
@@ -82,14 +83,7 @@ Status: ${request.status}`;
                   aria-label="Send WhatsApp Message"
                   className="text-green-600 hover:text-green-800"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M20.52 3.48a11.94 11.94 0 0 0-16.9 16.9l-1.66 5.11 5.25-1.55a11.93 11.93 0 0 0 13.9-20.46Zm-7.85 14.79a7.17 7.17 0 0 1-3.67-1.08l-.26-.16-2.21.65.59-2.17-.17-.28a7.07 7.07 0 1 1 5.72 3.04Z" />
-                  </svg>
+                  <FaWhatsapp size={17} />
                 </a>
               </td>
             </tr>

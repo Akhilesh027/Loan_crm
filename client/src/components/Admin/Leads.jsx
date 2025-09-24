@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { FaPhone, FaWhatsapp } from "react-icons/fa";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
@@ -153,21 +154,7 @@ const LeadsAdmin = () => {
                         title="Call"
                         aria-label="Call"
                       >
-                        {/* Phone SVG Icon */}
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M3 5h2l3.6 7.59a1 1 0 0 1-.21 1.11L6 17l4 4 3.38-2.25a1 1 0 0 1 1.11-.21L19 19v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5z"
-                          />
-                        </svg>
+                       <FaPhone />
                       </button>
 
                       <button
@@ -176,15 +163,7 @@ const LeadsAdmin = () => {
                         title="WhatsApp"
                         aria-label="WhatsApp"
                       >
-                        {/* WhatsApp SVG Icon */}
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M20.52 3.48a11.94 11.94 0 0 0-16.9 16.9l-1.66 5.11 5.25-1.55a11.93 11.93 0 0 0 13.9-20.46Zm-7.85 14.79a7.17 7.17 0 0 1-3.67-1.08l-.26-.16-2.21.65.59-2.17-.17-.28a7.07 7.07 0 1 1 5.72 3.04Z" />
-                        </svg>
+                        <FaWhatsapp size={17} />
                       </button>
                     </div>
                   </td>

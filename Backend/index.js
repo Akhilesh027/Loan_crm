@@ -18,6 +18,7 @@ const fs = require("fs");
 const Referral = require('./models/Referral.js');
 const ChatResponse = require('./models/ChatResponse.js');
 const AttendenceLog = require('./models/AttendenceLog.js');
+const uploadFiles = require('./middleware/upload.js')
 const app = express();
 
 mongoose.connect(
@@ -243,144 +244,174 @@ app.get('/api/requests', async (req, res) => {
     res.status(500).json({ success: false, error: 'Server error while fetching users with details' });
   }
 });
-const generateSequentialCaseId = async () => {
-  try {
-    // Use a counter collection to ensure sequential IDs
-    const Counter = mongoose.model('Counter', new mongoose.Schema({
-      _id: String,
-      seq: Number
-    }));
-    
-    const counter = await Counter.findByIdAndUpdate(
-      'customerCaseId',
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    
-    return `CASE-${String(counter.seq).padStart(4, '0')}`;
-  } catch (error) {
-    console.error('Error with counter:', error);
-    // Fallback: timestamp-based ID
-    return `CASE-TEMP-${Date.now()}`;
-  }
-};
 
-const fixExistingCustomers = async () => {
-  const customers = await Customer.find({ caseId: { $exists: false } });
-  
-  for (let i = 0; i < customers.length; i++) {
-    const customer = customers[i];
-    customer.caseId = `CASE-${String(i + 1).padStart(4, '0')}`;
-    await customer.save();
-  }
-};
 
-// Call this function once
-fixExistingCustomers();
 app.post('/api/customers', upload.fields([
-  { name: 'aadhaarDoc', maxCount: 1 },
-  { name: 'panDoc', maxCount: 1 },
-  { name: 'accountStatementDoc', maxCount: 1 },
-  // Expect field files for custom fields as customFieldFile_0, customFieldFile_1, ...
+  { name: 'aadhaarDoc' },
+  { name: 'panDoc' },
+  { name: 'accountStatementDoc' },
 ]), async (req, res) => {
   try {
-    // Normalize banks and otherBanks arrays
-    let banks = req.body.banks || [];
-    if (typeof banks === 'string') banks = [banks];
+    console.log('Request body:', req.body);
+    console.log('Request files:', req.files);
 
-    let otherBanks = req.body.otherBanks || [];
-    if (typeof otherBanks === 'string') otherBanks = [otherBanks];
-
-    // Extract accountNumbers map
-    const accountNumbers = {};
-    Object.keys(req.body).forEach(key => {
-      const match = key.match(/^accountNumbers\[(.+)\]$/);
-      if (match) accountNumbers[match[1]] = req.body[key];
-    });
-
-    // Parse customFields JSON string
-    let customFields = [];
-    if (req.body.customFields) {
-      try {
-        customFields = JSON.parse(req.body.customFields);
-      } catch {
-        customFields = [];
-      }
-    }
-
-    // Assign uploaded files filenames to customFields of type 'file'
-    customFields = customFields.map((field, idx) => {
-      if (field.type === 'file') {
-        const fileFieldName = `customFieldFile_${idx}`;
-        if (req.files && req.files[fileFieldName] && req.files[fileFieldName][0]) {
-          return { ...field, value: req.files[fileFieldName][0].filename };
-        }
-      }
-      return field;
-    });
-
-    const customerData = {
-      ...req.body,
+    const {
+      name,
+      phone,
+      email,
+      aadhaar,
+      pan,
+      cibil,
+      address,
+      problem,
       banks,
       otherBanks,
-      accountNumbers,
+      bankDetails,
       customFields,
-      documents: {
-        aadhaar: req.files.aadhaarDoc ? req.files.aadhaarDoc[0].filename : '',
-        pan: req.files.panDoc ? req.files.panDoc[0].filename : '',
-        accountStatement: req.files.accountStatementDoc ? req.files.accountStatementDoc[0].filename : ''
-      }
-    };
+      pageNumber,
+      referredPerson,
+      telecallerId,
+      telecallerName
+    } = req.body;
 
-    // Remove old keys that conflict with schema
-    delete customerData.bank;
-    delete customerData.otherBank;
-    delete customerData.customFields; // remove string version
-    Object.keys(customerData).forEach(key => {
-      if (key.startsWith('accountNumbers[')) delete customerData[key];
-    });
+    // Parse JSON fields with proper error handling
+    let parsedBanks = [];
+    let parsedOtherBanks = [];
+    let parsedBankDetails = {};
+    let parsedCustomFields = [];
 
-    // Generate unique case ID
-    const generateCaseId = async () => {
-      try {
-        const lastCustomer = await Customer.findOne().sort({ createdAt: -1 });
-        if (lastCustomer && lastCustomer.caseId) {
-          const lastCaseNumber = parseInt(lastCustomer.caseId.split('-')[1]);
-          const newCaseNumber = lastCaseNumber + 1;
-          return `CASE-${String(newCaseNumber).padStart(4, '0')}`;
+    try {
+      parsedBanks = Array.isArray(banks) ? banks : (banks ? JSON.parse(banks) : []);
+      parsedOtherBanks = Array.isArray(otherBanks) ? otherBanks : (otherBanks ? JSON.parse(otherBanks) : []);
+      parsedBankDetails = typeof bankDetails === 'object' ? bankDetails : (bankDetails ? JSON.parse(bankDetails) : {});
+      
+      // Fix for customFields - ensure it's properly parsed and validated
+      if (customFields) {
+        if (typeof customFields === 'string') {
+          parsedCustomFields = JSON.parse(customFields);
+        } else if (Array.isArray(customFields)) {
+          parsedCustomFields = customFields;
         }
-        return 'CASE-0001';
-      } catch (error) {
-        console.error('Error generating case ID:', error);
-        return `CASE-TEMP-${Date.now()}`;
+        
+        // Validate and clean custom fields
+        parsedCustomFields = parsedCustomFields.map(field => ({
+          label: field.label || '',
+          type: field.type || 'text',
+          value: field.value || ''
+        }));
       }
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      return res.status(400).json({ message: 'Invalid JSON data in form fields' });
+    }
+
+    // Handle file paths
+    const documents = {};
+    const updatedCustomFields = [...parsedCustomFields];
+    
+    if (req.files) {
+      // Handle main document files
+      if (req.files.aadhaarDoc) documents.aadhaarDoc = req.files.aadhaarDoc[0].filename;
+      if (req.files.panDoc) documents.panDoc = req.files.panDoc[0].filename;
+      if (req.files.accountStatementDoc) documents.accountStatementDoc = req.files.accountStatementDoc[0].filename;
+      if (req.files.additionalDoc) documents.additionalDoc = req.files.additionalDoc[0].filename;
+      
+      // Handle custom field files
+      Object.keys(req.files).forEach(key => {
+        if (key.startsWith('customFieldFile_')) {
+          const index = parseInt(key.split('_')[1]);
+          if (updatedCustomFields[index] && updatedCustomFields[index].type === 'file') {
+            updatedCustomFields[index].value = req.files[key][0].filename;
+          }
+        }
+      });
+    }
+const count = await Customer.countDocuments();
+const newCaseId = `CASE-${(count + 1).toString().padStart(4, "0")}`;
+
+    // Create customer data object
+    const customerData = {
+      caseId: newCaseId,
+      name: name?.trim(),
+      phone: phone?.trim(),
+      email: email?.trim(),
+      aadhaar: aadhaar?.trim(),
+      pan: pan?.trim(),
+      cibil: cibil ? parseInt(cibil) : undefined,
+      address: address?.trim(),
+      problem: problem?.trim(),
+      banks: parsedBanks,
+      otherBanks: parsedOtherBanks.filter(bank => bank.trim() !== ''),
+      bankDetails: parsedBankDetails,
+      customFields: updatedCustomFields,
+      referredPerson: referredPerson?.trim(),
+      telecallerId,
+      telecallerName: telecallerName?.trim(),
+      documents
     };
 
-    customerData.caseId = await generateCaseId();
+    // Add pageNumber only if provided
+    if (pageNumber && !isNaN(pageNumber)) {
+      customerData.pageNumber = parseInt(pageNumber);
+    }
 
+    console.log('Creating customer with data:', customerData);
+
+    // Create new customer
     const customer = new Customer(customerData);
     await customer.save();
 
+    // Populate the saved customer for response
+    const savedCustomer = await Customer.findById(customer._id).populate('telecallerId', 'username email');
+
     res.status(201).json({
-      message: 'Customer added successfully!',
-      customer
+      message: 'Customer created successfully',
+      customer: savedCustomer
     });
   } catch (error) {
-    console.error('Error saving customer:', error);
+    console.error('Error creating customer:', error);
+    
 
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.caseId) {
-      return res.status(400).json({
-        error: 'Duplicate case ID',
-        message: 'A customer with this case ID already exists. Please try again.'
-      });
+    
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Customer with this phone or email already exists' });
     }
-
-    res.status(500).json({
-      error: 'Failed to save customer',
-      message: error.message
-    });
+    
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+
+
+// Endpoint to upload payment proof for a case
+app.post('/api/customers/uploadPaymentProof/:caseId', upload.single('paymentProof'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const caseId = req.params.caseId;
+
+    // Update Customer record with file path
+    const updatedCustomer = await Customer.findOneAndUpdate(
+      { caseId },
+      { 
+        $set: { 'documents.paymentProof': req.file.filename, paymentStatus: 'pending' } 
+      },
+      { new: true }
+    );
+
+    if (!updatedCustomer) {
+      return res.status(404).json({ message: 'Case not found' });
+    }
+
+    res.json({ message: 'Payment proof uploaded successfully', file: req.file.filename, customer: updatedCustomer });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 
 // routes/customers.js - Add this route
 
@@ -505,31 +536,72 @@ app.get('/api/customers/:id', async (req, res) => {
 });
 
 // Assign officer to case
-app.post('/api/customers/:id/assign', async (req, res) => {
-  try {
-    const { agentId, totalAmount, advanceAmount, paymentProof } = req.body;
-    
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
-      {
+app.post('/api/customers/:id/assign',upload.single('agentPaymentProof'),
+  async (req, res) => {
+    try {
+      const { agentId, totalAmount, advanceAmount } = req.body;
+      let agentPaymentProofFileName = "";
+
+      if (req.file) {
+        agentPaymentProofFileName = req.file.filename;
+      }
+
+      const updateData = {
         assignedTo: agentId,
         status: 'In Progress',
-        ...(totalAmount && { totalAmount }),
-        ...(advanceAmount && { advanceAmount }),
-        ...(paymentProof && { paymentProof })
-      },
-      { new: true, runValidators: true }
-    ).populate('assignedTo', 'username');
-    
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
+        agentTotalAmount: totalAmount ? Number(totalAmount) : 0,
+        agentAdvanceAmount: advanceAmount ? Number(advanceAmount) : 0,
+        agentPaymentProof: agentPaymentProofFileName,
+      };
+
+      const customer = await Customer.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      ).populate('assignedTo', 'username');
+
+      if (!customer) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      res.status(200).json({ customer });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-    
-    res.status(200).json({ customer });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
-});
+);
+
+
+app.post('/api/customers/:id/payment',upload.single('paymentProof'),
+  async (req, res) => {
+    try {
+      const { totalAmount, advanceAmount } = req.body;
+      let paymentProofFileName = "";
+
+      if (req.file) {
+        paymentProofFileName = req.file.filename;
+      }
+
+      const updateData = {
+        totalAmount: totalAmount ? Number(totalAmount) : 0,
+        advanceAmount: advanceAmount ? Number(advanceAmount) : 0,
+        paymentProof: paymentProofFileName,
+      };
+
+      const customer = await Customer.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      );
+
+      if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+      res.json({ customer });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 // Complete case
 app.post('/api/customers/:id/complete', async (req, res) => {
@@ -580,37 +652,7 @@ app.post('/api/customers/:id/update', async (req, res) => {
 });
 
 // Add payment details
-app.post('/api/customers/:id/payment', async (req, res) => {
-  try {
-    const { totalAmount, advanceAmount, paymentProof } = req.body;
-    
-    if (!totalAmount || !advanceAmount) {
-      return res.status(400).json({ error: 'Total amount and advance amount are required' });
-    }
-    
-    if (parseFloat(advanceAmount) > parseFloat(totalAmount)) {
-      return res.status(400).json({ error: 'Advance amount cannot be greater than total amount' });
-    }
-    
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
-      {
-        totalAmount,
-        advanceAmount,
-        ...(paymentProof && { paymentProof })
-      },
-      { new: true, runValidators: true }
-    ).populate('assignedTo', 'username');
-    
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
-    }
-    
-    res.status(200).json({ customer });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+
 
 // Add call response
 app.post('/api/customers/:id/call', async (req, res) => {

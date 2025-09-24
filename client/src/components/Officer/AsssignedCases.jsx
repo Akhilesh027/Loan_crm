@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaEye, FaCheckCircle, FaEdit, FaTimes, FaMoneyBillWave, FaComments } from "react-icons/fa";
+import { FaEye, FaCheckCircle,FaUserPlus, FaEdit, FaTimes, FaMoneyBillWave, FaComments } from "react-icons/fa";
 
 const statusColors = {
   Solved: "bg-green-100 text-green-800 border border-green-300",
@@ -571,223 +571,208 @@ const AssignedCases = () => {
       </Modal>
 
       {/* VIEW CASE DETAILS Modal */}
-      <Modal isOpen={!!selectedCase} onClose={() => setSelectedCase(null)} title="Case Details" size="xl">
-        {selectedCase && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Basic info */}
+       <Modal 
+       isOpen={!!selectedCase} 
+       onClose={() => setSelectedCase(null)} 
+       title="Case Details"
+       size="xl"
+     >
+       {selectedCase && (
+         <div className="space-y-6">
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div>
+               <p className="text-sm text-gray-600">Name</p>
+               <p className="font-medium">{selectedCase.name}</p>
+             </div>
+     
+             <div>
+               <p className="text-sm text-gray-600">Phone</p>
+               <p className="font-medium">{selectedCase.phone || "-"}</p>
+             </div>
+     
+             <div>
+               <p className="text-sm text-gray-600">Email</p>
+               <p className="font-medium">{selectedCase.email || "-"}</p>
+             </div>
+      <div>
+               <p className="text-sm text-gray-600">Adhar number</p>
+               <p className="font-medium">{selectedCase.aadhaar || "-"}</p>
+             </div>
               <div>
-                <p className="text-sm text-gray-600">Name</p>
-                <p className="font-medium">{selectedCase.name}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Phone</p>
-                <p className="font-medium">{selectedCase.phone || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Email</p>
-                <p className="font-medium">{selectedCase.email || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Status</p>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[selectedCase.status]}`}>
-                  {selectedCase.status}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Problem</p>
-                <p className="font-medium">{selectedCase.problem}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Bank</p>
-                <p className="font-medium">{selectedCase.bank || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Loan Type</p>
-                <p className="font-medium">{selectedCase.loanType || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Case ID</p>
-                <p className="font-medium">{selectedCase.caseId || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Priority</p>
-                <p className="font-medium">{selectedCase.priority || "-"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Assigned Date</p>
-                <p className="font-medium">{selectedCase.assignedDate ? new Date(selectedCase.assignedDate).toLocaleDateString() : "N/A"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Days Count</p>
-                <p className="font-medium">
-                  {selectedCase.daysCount} day{selectedCase.daysCount !== 1 ? "s" : ""}
-                </p>
-              </div>
-            </div>
-
-            {/* Payment Details */}
-            {(selectedCase.totalAmount || selectedCase.advanceAmount) && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
-                  <FaMoneyBillWave className="mr-2" /> Payment Details
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-green-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="font-medium text-green-700">₹{selectedCase.totalAmount || "0"}</p>
-                  </div>
-
-                  <div className="bg-blue-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Advance Paid</p>
-                    <p className="font-medium text-blue-700">₹{selectedCase.advanceAmount || "0"}</p>
-                  </div>
-
-                  <div className="bg-orange-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Pending Amount</p>
-                    <p className="font-medium text-orange-700">
-                      ₹{(selectedCase.totalAmount - selectedCase.advanceAmount).toFixed(2) || "0"}
-                    </p>
-                  </div>
-                </div>
-
-                {selectedCase.paymentProof && (
-                  <div className="mt-4">
-                    <DocumentPreview label="Payment Proof" url={selectedCase.paymentProof} />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Banking Details */}
-            <div className="pt-4 border-t border-gray-200">
-              <h4 className="font-medium text-gray-700 mb-3">Banking Details</h4>
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bank Name
-                      </th>
-                      <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Account Number
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {selectedCase.banks && selectedCase.banks.length > 0 ? (
-                      selectedCase.banks.map((bank, index) => (
-                        <tr key={bank + index}>
-                          <td className="py-2 px-4">{bank}</td>
-                          <td className="py-2 px-4">
-                            {selectedCase.accountNumbers && selectedCase.accountNumbers[bank]
-                              ? selectedCase.accountNumbers[bank]
-                              : selectedCase.accountNumber || "N/A"}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-2 px-4" colSpan="2">
-                          {selectedCase.bank ? (
-                            <>
-                              <div className="font-medium">{selectedCase.bank}</div>
-                              {selectedCase.accountNumber && (
-                                <div className="text-sm text-gray-600">Account: {selectedCase.accountNumber}</div>
-                              )}
-                            </>
-                          ) : (
-                            "No banking details available"
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Reported Issues */}
-            {selectedCase.issues && selectedCase.issues.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-2">Reported Issues</h4>
-                <ul className="list-disc pl-5">
-                  {selectedCase.issues.map((issue, idx) => (
-                    <li key={idx} className="text-sm text-gray-700 mb-1">
-                      {issue}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Documents */}
-            {selectedCase.documents && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-3">Documents</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedCase.documents.aadhaar && <DocumentPreview label="Aadhaar Card" url={selectedCase.documents.aadhaar} />}
-                  {selectedCase.documents.pan && <DocumentPreview label="PAN Card" url={selectedCase.documents.pan} />}
-                  {selectedCase.documents.accountStatement && (
-                    <DocumentPreview label="Account Statement" url={selectedCase.documents.accountStatement} />
-                  )}
-                  {selectedCase.documents.paymentProof && <DocumentPreview label="Payment Proof" url={selectedCase.documents.paymentProof} />}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {selectedCase.notes && selectedCase.notes.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
-                <div className="space-y-3">
-                  {selectedCase.notes.map((note, idx) => (
-                    <div key={idx} className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-700">{note.content}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(note.addedAt).toLocaleString()}
-                        {note.addedBy && ` • By ${note.addedBy}`}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* CIBIL Scores if solved */}
-            {selectedCase.status === "Solved" && (
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-700 mb-3">CIBIL Score Improvement</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">Before Resolution</p>
-                    <p className="font-medium text-blue-700 text-xl">{selectedCase.cibilBefore || "N/A"}</p>
-                  </div>
-
-                  <div className="bg-green-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-600">After Resolution</p>
-                    <p className="font-medium text-green-700 text-xl">{selectedCase.cibilAfter || "N/A"}</p>
-                  </div>
-                </div>
-
-                {selectedCase.resolvedDate && (
-                  <div className="mt-3 text-sm text-gray-600">Resolved on: {new Date(selectedCase.resolvedDate).toLocaleDateString()}</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+               <p className="text-sm text-gray-600">Pan number</p>
+               <p className="font-medium">{selectedCase.pan || "-"}</p>
+             </div>
+             <div>
+               <p className="text-sm text-gray-600">Status</p>
+               <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[selectedCase.status]}`}>
+                 {selectedCase.status}
+               </span>
+             </div>
+     
+             <div>
+               <p className="text-sm text-gray-600">Problem</p>
+               <p className="font-medium">{selectedCase.problem}</p>
+             </div>
+     
+             <div>
+               <p className="text-sm text-gray-600">Case ID</p>
+               <p className="font-medium">{selectedCase.caseId || "-"}</p>
+             </div>
+     
+             <div>
+               <p className="text-sm text-gray-600">Priority</p>
+               <p className="font-medium">{selectedCase.priority || "-"}</p>
+             </div>
+             <div>
+               <p className="text-sm text-gray-600">pageNumber</p>
+               <p className="font-medium">{selectedCase.pageNumber || "-"}</p>
+             </div>
+             {/* Telecaller Details */}
+             <div>
+               <p className="text-sm text-gray-600">Telecaller Name</p>
+               <p className="font-medium">{selectedCase.telecallerName || "-"}</p>
+             </div>
+             <div>
+               <p className="text-sm text-gray-600">Telecaller ID</p>
+               <p className="font-medium">{selectedCase.telecallerId || "-"}</p>
+             </div>
+     
+           </div>
+       
+     
+           {/* Agent Payment Details Section */}
+           {(selectedCase.agentTotalAmount || selectedCase.agentAdvanceAmount) && (
+             <div className="pt-4 border-t border-gray-200">
+               <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                 <FaUserPlus className="mr-2" /> Agent Payment Details
+               </h4>
+               <table className="min-w-full bg-white border border-gray-300 rounded-md">
+                 <tbody>
+                   <tr className="border-b">
+                     <td className="py-2 px-4 font-medium">Agent Total Amount</td>
+                     <td className="py-2 px-4">₹{selectedCase.agentTotalAmount || "0"}</td>
+                   </tr>
+                   <tr className="border-b bg-gray-50">
+                     <td className="py-2 px-4 font-medium">Agent Advance Paid</td>
+                     <td className="py-2 px-4">₹{selectedCase.agentAdvanceAmount || "0"}</td>
+                   </tr>
+                   <tr>
+                     <td className="py-2 px-4 font-medium">Agent Pending Amount</td>
+                     <td className="py-2 px-4">
+                       ₹{((selectedCase.agentTotalAmount || 0) - (selectedCase.agentAdvanceAmount || 0)).toFixed(2)}
+                     </td>
+                   </tr>
+                   {selectedCase.agentPaymentProof && (
+                     <tr>
+                       <td className="py-2 px-4 font-medium">Agent Payment Proof</td>
+                       <td className="py-2 px-4">
+                         <DocumentPreview label="Agent Payment Proof" url={selectedCase.agentPaymentProof} />
+                       </td>
+                     </tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
+           )}
+     
+           {/* Banking Details Table with Loan Type and Issues */}
+           <div className="pt-4 border-t border-gray-200">
+             <h4 className="font-medium text-gray-700 mb-3">Banking Details</h4>
+             <div className="overflow-x-auto">
+               <table className="min-w-full bg-white border border-gray-200">
+                 <thead>
+                   <tr className="bg-gray-50">
+                     <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Name</th>
+                     <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Number</th>
+                     <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loan Type</th>
+                     <th className="py-2 px-4 border-b text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issues</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-200">
+                   {selectedCase.banks && selectedCase.banks.length > 0 ? (
+                     selectedCase.banks.map((bank, index) => {
+                       const bankDetail = selectedCase.bankDetails?.[bank] || {};
+                       return (
+                         <tr key={index}>
+                           <td className="py-2 px-4">{bank}</td>
+                           <td className="py-2 px-4">{bankDetail.accountNumber || 'N/A'}</td>
+                           <td className="py-2 px-4">{bankDetail.loanType || 'N/A'}</td>
+                           <td className="py-2 px-4">
+                             {bankDetail.issues && bankDetail.issues.length > 0
+                               ? bankDetail.issues.join(", ")
+                               : "No issues reported"}
+                           </td>
+                         </tr>
+                       );
+                     })
+                   ) : (
+                     <tr>
+                       <td className="py-2 px-4" colSpan="4">
+                         No banking details available
+                       </td>
+                     </tr>
+                   )}
+                 </tbody>
+               </table>
+             </div>
+           </div>
+     
+           {/* Issues Section */}
+           {selectedCase.issues && selectedCase.issues.length > 0 && (
+             <div className="pt-4 border-t border-gray-200">
+               <h4 className="font-medium text-gray-700 mb-2">Reported Issues</h4>
+               <ul className="list-disc pl-5">
+                 {selectedCase.issues.map((issue, index) => (
+                   <li key={index} className="text-sm text-gray-700 mb-1">{issue}</li>
+                 ))}
+               </ul>
+             </div>
+           )}
+     
+           {/* Documents Section */}
+           {selectedCase.documents && (
+             <div className="pt-4 border-t border-gray-200">
+               <h4 className="font-medium text-gray-700 mb-3">Documents</h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {selectedCase.documents.aadhaarDoc && (
+                   <DocumentPreview label="Aadhaar Card" url={selectedCase.documents.aadhaarDoc} />
+                 )}
+                 {selectedCase.documents.panDoc && (
+                   <DocumentPreview label="PAN Card" url={selectedCase.documents.panDoc} />
+                 )}
+                 {selectedCase.documents.accountStatementDoc && (
+                   <DocumentPreview label="Account Statement" url={selectedCase.documents.accountStatementDoc} />
+                 )}
+                 {selectedCase.documents.additionalDoc && (
+                   <DocumentPreview label="Additional Document" url={selectedCase.documents.additionalDoc} />
+                 )}
+                 {selectedCase.documents.paymentProof && (
+                   <DocumentPreview label="Payment Proof" url={selectedCase.documents.paymentProof} />
+                 )}
+               </div>
+             </div>
+           )}
+     
+           {/* Notes Section */}
+           {selectedCase.notes && selectedCase.notes.length > 0 && (
+             <div className="pt-4 border-t border-gray-200">
+               <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
+               <div className="space-y-3">
+                 {selectedCase.notes.map((note, index) => (
+                   <div key={index} className="bg-gray-50 p-3 rounded-md">
+                     <p className="text-sm text-gray-700">{note.content}</p>
+                     <p className="text-xs text-gray-500 mt-1">
+                       {new Date(note.addedAt).toLocaleString()}
+                       {note.addedBy && ` • By ${note.addedBy}`}
+                     </p>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+         </div>
+       )}
+     </Modal>
     </div>
   );
 };
