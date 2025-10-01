@@ -50,6 +50,8 @@ import FieldDataa from './components/Telecaller/pages/FieldDataa.jsx';
 import Followups from './components/Telecaller/pages/FollowUps.jsx';
 import AdminCaseRequests from './components/Admin/Request.jsx';
 import Attendence from './components/Admin/Attendence.jsx';
+import CibilReportsPage from './components/Admin/Ciblereport.jsx';
+import RequestTableWithAdminResponse from './components/Officer/Adminresponse.jsx';
 
 function App() {
   return (
@@ -69,6 +71,7 @@ function App() {
               <Route path="today-followup" element={<TodaysFollowups />} />
               <Route path="followups" element={<Followups />} />
               <Route path="call-logs" element={<CallLogs />} />
+              <Route path="expenses" element={<ExpenseTracking />} />
               <Route path="field-data" element={<FieldDataa />} />
               <Route path="responses" element={<CustomerResponse />} />
               <Route path="reports" element={<Reports />} />
@@ -93,6 +96,8 @@ function App() {
               <Route index element={<OfficerDashboard />} />
               <Route path="dashboard" element={<OfficerDashboard />} />
               <Route path="assigned-cases" element={<AssignedCases />} />
+                            <Route path="adminresponse" element={<RequestTableWithAdminResponse />} />
+
               <Route path="case-offers" element={<CaseOffers />} />
               <Route path="Leads" element={<Leads />} />
               <Route path="payments" element={<Payments />} />
@@ -111,6 +116,7 @@ function App() {
               <Route path="telecaller" element={<TelecallerUsers />} />
               <Route path="marketing" element={<MarketingUsers />} />
               <Route path="agent" element={<AgentUsers />} />
+              <Route path="ciblereport" element={<CibilReportsPage />} />
               <Route path="Leadss" element={<LeadsAdmin/>} />
               <Route path="user-management" element={<UserManagement />} />
               <Route path="financial-reports" element={<FinancialReport />} />

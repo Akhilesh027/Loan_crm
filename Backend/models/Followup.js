@@ -27,7 +27,7 @@ const followupSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["Pending", "Completed", "Rejected", "Call Back", "In Progress","Connected", "Not Connected","Success"],
+    enum: ["Pending", "Completed", "Rejected", "Call Back", "In Progress","Connected", "Not Connected", "Success"],
     default: "Pending"
   },
   callbackTime: {

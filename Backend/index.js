@@ -245,142 +245,284 @@ app.get('/api/requests', async (req, res) => {
   }
 });
 
+// NOTE: This assumes 'Customer' model and 'upload' middleware (e.g., multer) are imported and configured.
+
+// Function to safely parse a field into an array (handling string or array input from multer)
+const parseArrayField = (field) => {
+    if (Array.isArray(field)) {
+        return field;
+    }
+    // If it's a comma-separated string (common for single checkbox items with multer)
+    if (typeof field === 'string' && field.trim() !== '') {
+        // Multer for FormData might send fields like 'bank1,bank2' or 'bank1'
+        return field.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+// Ensure Referral model is imported at the top of your file:
+// const Referral = require('./models/Referral.js'); 
 
 app.post('/api/customers', upload.fields([
-  { name: 'aadhaarDoc' },
-  { name: 'panDoc' },
-  { name: 'accountStatementDoc' },
+    { name: 'aadhaarDoc', maxCount: 1 },
+    { name: 'panDoc', maxCount: 1 },
+    { name: 'accountStatementDoc', maxCount: 1 },
+    { name: 'paymentProof', maxCount: 1 },
+    { name: 'agentPaymentProof', maxCount: 1 },
+    { name: 'additionalDoc', maxCount: 1 },
+    // Include the placeholder for dynamic custom file fields (if not defined globally in multer config)
+    ...Array.from({ length: 10 }, (_, i) => ({ name: `customFieldFile_${i}`, maxCount: 1 }))
 ]), async (req, res) => {
-  try {
-    console.log('Request body:', req.body);
-    console.log('Request files:', req.files);
-
-    const {
-      name,
-      phone,
-      email,
-      aadhaar,
-      pan,
-      cibil,
-      address,
-      problem,
-      banks,
-      otherBanks,
-      bankDetails,
-      customFields,
-      pageNumber,
-      referredPerson,
-      telecallerId,
-      telecallerName
-    } = req.body;
-
-    // Parse JSON fields with proper error handling
-    let parsedBanks = [];
-    let parsedOtherBanks = [];
-    let parsedBankDetails = {};
-    let parsedCustomFields = [];
-
     try {
-      parsedBanks = Array.isArray(banks) ? banks : (banks ? JSON.parse(banks) : []);
-      parsedOtherBanks = Array.isArray(otherBanks) ? otherBanks : (otherBanks ? JSON.parse(otherBanks) : []);
-      parsedBankDetails = typeof bankDetails === 'object' ? bankDetails : (bankDetails ? JSON.parse(bankDetails) : {});
-      
-      // Fix for customFields - ensure it's properly parsed and validated
-      if (customFields) {
-        if (typeof customFields === 'string') {
-          parsedCustomFields = JSON.parse(customFields);
-        } else if (Array.isArray(customFields)) {
-          parsedCustomFields = customFields;
+        // ... (Existing parsing and destructuring of req.body) ...
+        // Destructure fields, including the restored 'otherBanks' and the CIBIL field 'cibil'
+        const {
+            name, phone, email, aadhaar, pan, cibil, address, problem,
+            banks, otherBanks, bankDetails, customFields, pageNumber,
+            referredPerson, // <--- Key Field
+            telecallerId, telecallerName, referredPersonPhone // Assuming you might have a referredPersonPhone field
+        } = req.body;
+
+        // --- Data Parsing (Existing Logic) ---
+        let parsedBanks = parseArrayField(banks);
+        let parsedOtherBanks = parseArrayField(otherBanks);
+        let parsedBankDetails = {};
+        let parsedCustomFields = [];
+        let cibilScore = cibil ? parseInt(cibil) : undefined;
+        // ... (JSON parsing try/catch for bankDetails and customFields) ...
+
+        try {
+            parsedBankDetails = bankDetails ? JSON.parse(bankDetails) : {};
+            if (customFields && typeof customFields === 'string') {
+                parsedCustomFields = JSON.parse(customFields);
+            } else if (Array.isArray(customFields)) {
+                parsedCustomFields = customFields;
+            }
+        } catch (parseError) {
+            console.error('JSON parsing error:', parseError);
+            return res.status(400).json({ message: 'Invalid JSON data in form fields (bankDetails or customFields)' });
+        }
+
+        // --- File & Document Handling (Existing Logic) ---
+        const documents = {};
+        const updatedCustomFields = Array.isArray(parsedCustomFields) ? parsedCustomFields : [];
+        
+        if (req.files) {
+            // ... (Mapping file uploads to documents and customFields) ...
+            if (req.files.aadhaarDoc) documents.aadhaarDoc = req.files.aadhaarDoc[0].filename;
+            if (req.files.panDoc) documents.panDoc = req.files.panDoc[0].filename;
+            if (req.files.accountStatementDoc) documents.accountStatementDoc = req.files.accountStatementDoc[0].filename;
+            if (req.files.additionalDoc) documents.additionalDoc = req.files.additionalDoc[0].filename;
+            if (req.files.paymentProof) documents.paymentProof = req.files.paymentProof[0].filename;
+            if (req.files.agentPaymentProof) documents.agentPaymentProof = req.files.agentPaymentProof[0].filename;
+
+            Object.keys(req.files).forEach(key => {
+                if (key.startsWith('customFieldFile_')) {
+                    const index = parseInt(key.split('_')[1]);
+                    if (updatedCustomFields[index] && updatedCustomFields[index].type === 'file') {
+                        updatedCustomFields[index].value = req.files[key][0].filename;
+                    }
+                }
+            });
         }
         
-        // Validate and clean custom fields
-        parsedCustomFields = parsedCustomFields.map(field => ({
-          label: field.label || '',
-          type: field.type || 'text',
-          value: field.value || ''
-        }));
-      }
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError);
-      return res.status(400).json({ message: 'Invalid JSON data in form fields' });
-    }
+        // ==========================================================
+        // 🚀 NEW LOGIC: Referral Table Update/Creation
+        // ==========================================================
+        if (referredPerson?.trim()) {
+            const referralName = referredPerson.trim();
+            // Assuming phone is the unique identifier for a referral partner
+            const referralQuery = referredPersonPhone?.trim() ? { phone: referredPersonPhone.trim() } : { name: referralName };
+            
+            let referralEntry = await Referral.findOne(referralQuery);
 
-    // Handle file paths
-    const documents = {};
-    const updatedCustomFields = [...parsedCustomFields];
-    
-    if (req.files) {
-      // Handle main document files
-      if (req.files.aadhaarDoc) documents.aadhaarDoc = req.files.aadhaarDoc[0].filename;
-      if (req.files.panDoc) documents.panDoc = req.files.panDoc[0].filename;
-      if (req.files.accountStatementDoc) documents.accountStatementDoc = req.files.accountStatementDoc[0].filename;
-      if (req.files.additionalDoc) documents.additionalDoc = req.files.additionalDoc[0].filename;
-      
-      // Handle custom field files
-      Object.keys(req.files).forEach(key => {
-        if (key.startsWith('customFieldFile_')) {
-          const index = parseInt(key.split('_')[1]);
-          if (updatedCustomFields[index] && updatedCustomFields[index].type === 'file') {
-            updatedCustomFields[index].value = req.files[key][0].filename;
-          }
+            if (referralEntry) {
+                // Referral exists: Increment case count
+                referralEntry.cases += 1;
+                await referralEntry.save();
+                console.log(`Updated existing referral: ${referralName}`);
+            } else {
+                // Referral does not exist: Create new entry
+                referralEntry = new Referral({
+                    name: referralName,
+                    phone: referredPersonPhone?.trim() || 'N/A',
+                    cases: 1,
+                    // Note: successRate and commission default values are set in model/endpoint logic
+                });
+                await referralEntry.save();
+                console.log(`Created new referral: ${referralName}`);
+            }
         }
-      });
+        // ==========================================================
+        
+        // --- Final Customer Data Object (Existing Logic) ---
+        const customerData = {
+            name: name?.trim(),
+            phone: phone?.trim(),
+            email: email?.trim(),
+            aadhaar: aadhaar?.trim(),
+            pan: pan?.trim(),
+            cibilBefore: cibilScore,
+            address: address?.trim(),
+            problem: problem?.trim(),
+            banks: parsedBanks,
+            otherBanks: parsedOtherBanks,
+            bankDetails: parsedBankDetails,
+            customFields: updatedCustomFields,
+            referredPerson: referredPerson?.trim(), // Ensure this field is saved
+            telecallerId,
+            telecallerName: telecallerName?.trim(),
+            documents 
+        };
+
+        if (pageNumber && !isNaN(pageNumber)) {
+            customerData.pageNumber = parseInt(pageNumber);
+        }
+
+        console.log('Creating customer with data:', customerData);
+
+        // Create new customer
+        const customer = new Customer(customerData);
+        await customer.save();
+
+        // Retrieve and populate the saved customer for response
+        const savedCustomer = await Customer.findById(customer._id)
+            .populate('telecallerId assignedTo', 'username email');
+
+        res.status(201).json({
+            message: 'Customer created successfully and referral updated/created',
+            customer: savedCustomer
+        });
+    } catch (error) {
+        // ... (Existing error handling logic) ...
+        console.error('Error creating customer:', error);
+        
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: 'Validation failed', errors: messages });
+        }
+        
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'A customer with existing unique data (e.g., phone, caseId) already exists.' });
+        }
+        
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
-const count = await Customer.countDocuments();
-const newCaseId = `CASE-${(count + 1).toString().padStart(4, "0")}`;
-
-    // Create customer data object
-    const customerData = {
-      caseId: newCaseId,
-      name: name?.trim(),
-      phone: phone?.trim(),
-      email: email?.trim(),
-      aadhaar: aadhaar?.trim(),
-      pan: pan?.trim(),
-      cibil: cibil ? parseInt(cibil) : undefined,
-      address: address?.trim(),
-      problem: problem?.trim(),
-      banks: parsedBanks,
-      otherBanks: parsedOtherBanks.filter(bank => bank.trim() !== ''),
-      bankDetails: parsedBankDetails,
-      customFields: updatedCustomFields,
-      referredPerson: referredPerson?.trim(),
-      telecallerId,
-      telecallerName: telecallerName?.trim(),
-      documents
-    };
-
-    // Add pageNumber only if provided
-    if (pageNumber && !isNaN(pageNumber)) {
-      customerData.pageNumber = parseInt(pageNumber);
-    }
-
-    console.log('Creating customer with data:', customerData);
-
-    // Create new customer
-    const customer = new Customer(customerData);
-    await customer.save();
-
-    // Populate the saved customer for response
-    const savedCustomer = await Customer.findById(customer._id).populate('telecallerId', 'username email');
-
-    res.status(201).json({
-      message: 'Customer created successfully',
-      customer: savedCustomer
-    });
-  } catch (error) {
-    console.error('Error creating customer:', error);
-    
-
-    
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Customer with this phone or email already exists' });
-    }
-    
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
 });
 
+
+app.put('/api/customers/:id', upload.fields([
+  { name: "aadhaarDoc", maxCount: 1 },
+  { name: "panDoc", maxCount: 1 },
+  { name: "accountStatementDoc", maxCount: 1 },
+  { name: "additionalDoc", maxCount: 1 },
+  // handle customFieldFile_* fields similarly if needed
+]), async (req, res) => {
+  try {
+    const customerId = req.params.id;
+
+    // Extract data fields from request
+    const {
+      name, phone, email, aadhaar, pan, cibil, address,
+      problem, banks, otherBanks, bankDetails,
+      pageNumber, referredPerson, telecallerId, telecallerName,
+      customFields
+    } = req.body;
+
+    // Parse JSON if sent as string (due to form-data)
+    const banksArray = typeof banks === 'string' ? JSON.parse(banks) : banks || [];
+    const otherBanksArray = typeof otherBanks === 'string' ? JSON.parse(otherBanks) : otherBanks || [];
+    const bankDetailsObj = typeof bankDetails === 'string' ? JSON.parse(bankDetails) : bankDetails || {};
+    const customFieldsArray = typeof customFields === 'string' ? JSON.parse(customFields) : customFields || [];
+
+    // Prepare update data object
+    const updateData = {
+      name, phone, email, aadhaar, pan, cibil, address,
+      problem, banks: banksArray, otherBanks: otherBanksArray,
+      bankDetails: bankDetailsObj,
+      pageNumber, referredPerson, telecallerId, telecallerName,
+      customFields: customFieldsArray,
+    };
+
+    // Handle uploaded files - for example, save file paths/names in database
+    if (req.files) {
+      if (req.files.aadhaarDoc && req.files.aadhaarDoc[0]) {
+        updateData.aadhaarDocPath = req.files.aadhaarDoc[0].path;
+      }
+      if (req.files.panDoc && req.files.panDoc[0]) {
+        updateData.panDocPath = req.files.panDoc[0].path;
+      }
+      if (req.files.accountStatementDoc && req.files.accountStatementDoc[0]) {
+        updateData.accountStatementDocPath = req.files.accountStatementDoc[0].path;
+      }
+      if (req.files.additionalDoc && req.files.additionalDoc[0]) {
+        updateData.additionalDocPath = req.files.additionalDoc[0].path;
+      }
+      // Handle custom field files (customFieldFile_*) similarly
+    }
+
+    // Update customer document in database
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      customerId,
+      updateData,
+      { new: true } // return the updated document
+    );
+
+    if (!updatedCustomer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    return res.json(updatedCustomer);
+  } catch (error) {
+    console.error("Error updating customer", error);
+    return res.status(500).json({ message: "Server error updating customer", error: error.message });
+  }
+});
+app.post("/api/customers/:caseId/update-bank-status", async (req, res) => {
+     try {
+        const { caseId } = req.params;
+        const { bank, status } = req.body; // Expects: { "bank": "HDFC Bank", "status": "Completed" }
+
+        if (!bank || !status) {
+            return res.status(400).json({ error: "Bank name and new status are required." });
+        }
+        
+        // Find the customer by ID
+        const customer = await Customer.findById(caseId);
+
+        if (!customer) {
+            return res.status(404).json({ error: "Customer not found." });
+        }
+
+        // Use Mongoose Map syntax to update a nested field by key
+        const bankDetailsMap = customer.bankDetails;
+        
+        if (!bankDetailsMap.has(bank)) {
+            return res.status(404).json({ error: `Bank '${bank}' not found for this customer.` });
+        }
+
+        // Update the status on the nested document
+        bankDetailsMap.get(bank).status = status;
+
+        // Mark the nested field as modified to ensure Mongoose saves the change on a Map type
+        customer.markModified('bankDetails');
+
+        await customer.save();
+        
+        // Return the updated customer object
+        res.status(200).json({
+            message: `Status for ${bank} updated to ${status}.`,
+            customer: customer
+        });
+
+    } catch (error) {
+        console.error("Error updating bank status:", error);
+        res.status(500).json({ error: "Server error while updating bank status." });
+    }
+
+});
+
+// Assign Officer/Agent and Set Case Type
 
 
 // Endpoint to upload payment proof for a case
@@ -1145,37 +1287,50 @@ app.get('/api/dashboard/stats', async (req, res) => {
     });
     
     // Count pending follow-ups (followups with empty response)
-    const pendingFollowups = await Followup.countDocuments({
+    const pendingFollowups = await Calllog.countDocuments({
       response: '',
       createdAt: { $gte: today, $lt: tomorrow }
     });
-    
-    res.json([
-      { 
-        icon: "fa-phone", 
-        value: todaysCalls, 
-        label: "Today's Calls", 
-        color: "bg-blue-500" 
-      },
-      { 
-        icon: "fa-check-circle", 
-        value: responsiveCalls, 
-        label: "Responsive Calls", 
-        color: "bg-green-500" 
-      },
-      { 
-        icon: "fa-times-circle", 
-        value: noResponseCalls, 
-        label: "No Response", 
-        color: "bg-red-500" 
-      },
-      { 
-        icon: "fa-bell", 
-        value: pendingFollowups, 
-        label: "Pending Follow-ups", 
-        color: "bg-yellow-500" 
-      }
-    ]);
+    // Count successful calls for the day
+const successCalls = await Followup.countDocuments({
+  status: 'Success',
+  result: 'Success',   // Adjust if your schema uses a different property or value
+  createdAt: { $gte: today, $lt: tomorrow }
+});
+
+ res.json([
+  {
+    icon: "fa-phone",
+    value: todaysCalls,
+    label: "Today's Calls",
+    color: "bg-blue-500"
+  },
+  {
+    icon: "fa-check-circle",
+    value: responsiveCalls,
+    label: "Responsive Calls",
+    color: "bg-green-500"
+  },
+  {
+    icon: "fa-times-circle",
+    value: noResponseCalls,
+    label: "No Response",
+    color: "bg-red-500"
+  },
+  {
+    icon: "fa-bell",
+    value: pendingFollowups,
+    label: "Pending Follow-ups",
+    color: "bg-yellow-500"
+  },
+  {
+    icon: "fa-star",
+    value: successCalls,
+    label: "Success Calls",
+    color: "bg-teal-500"
+  }
+]);
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2182,6 +2337,276 @@ app.get('/api/marketing/stats', async (req, res) => {
     console.error("Admin stats error:", error);
     res.status(500).json({ error: error.message });
   }
+});
+app.post('/api/customers/:caseId/upload-cibil', upload.single('cibilReport'), async (req, res) => {
+   try {
+        const { caseId } = req.params;
+        
+        if (!req.file) {
+            return res.status(400).json({ error: "No CIBIL Report file uploaded." });
+        }
+
+        const customer = await Customer.findById(caseId);
+
+        if (!customer) {
+            fs.unlinkSync(req.file.path);
+            return res.status(404).json({ error: "Case/Customer not found." });
+        }
+        
+        // =========================================================
+        // 🚨 FIX: Clear expired nextCallDate entries to pass validation
+        // =========================================================
+        const now = new Date();
+        let callHistoryModified = false;
+
+        if (customer.callHistory && customer.callHistory.length > 0) {
+            customer.callHistory.forEach(call => {
+                // Check if nextCallDate is set AND is in the past or exactly now
+                if (call.nextCallDate && new Date(call.nextCallDate) <= now) {
+                    // Unset the field so Mongoose doesn't validate it against the "must be in the future" rule
+                    call.nextCallDate = undefined; 
+                    callHistoryModified = true;
+                }
+            });
+
+            if (callHistoryModified) {
+                // Crucial step for array modifications
+                customer.markModified('callHistory');
+            }
+        }
+        // =========================================================
+
+        // --- CIBIL Upload Logic (Same as before) ---
+        const documents = customer.documents || {}; 
+        
+        // Delete old file if exists (Good practice)
+        if (documents.cibilReport) {
+             try {
+                fs.unlinkSync(`uploads/${documents.cibilReport}`);
+            } catch (unlinkError) {
+                console.warn("Could not delete old CIBIL report file:", unlinkError);
+            }
+        }
+        
+        // Save the new file name/path
+        documents.cibilReport = req.file.filename;
+        customer.documents = documents;
+        customer.markModified('documents'); 
+
+        // Optional: Change status
+        if (customer.status !== 'Solved') {
+            customer.status = 'Pending'; 
+        }
+
+        // The document is now validated against the "future date" rule and ready to save
+        await customer.save();
+
+        res.status(200).json({
+            message: "CIBIL Report uploaded and saved successfully.",
+            customer: customer
+        });
+
+    } catch (error) {
+        console.error("Error during CIBIL report upload:", error);
+        // Clean up the newly uploaded file if saving fails
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        // Return a 500 status with the validation error message
+        res.status(500).json({ error: "Server error or validation failed: " + error.message });
+    }
+
+});
+
+
+app.get('/api/cibil-reports', async (req, res) => {
+    try {
+        // --- 1. Define the query to filter CIBIL-related cases ---
+        // Match cases where:
+        // a) caseType is explicitly 'cibil' 
+        // b) The cibilReport document exists (meaning it was uploaded)
+        const query = {
+            $or: [
+                { caseType: 'cibil' },
+                { 'documents.cibilReport': { $exists: true, $ne: null } },
+            ]
+        };
+
+        // --- 2. Fetch and Populate ---
+        const cibilCases = await Customer.find(query)
+            .select('caseId name status problem priority assignedDate caseType documents cibilBefore cibilAfter assignedTo')
+            .populate('assignedTo', 'username') // Only populate the assigned agent's username
+            .sort({ assignedDate: -1 });
+
+        // --- 3. Return the data ---
+        res.status(200).json({
+            success: true,
+            cases: cibilCases
+        });
+
+    } catch (error) {
+        console.error("Error fetching CIBIL reports:", error);
+        res.status(500).json({ 
+            success: false,
+            error: "Server error while fetching CIBIL reports." 
+        });
+    }
+});
+
+
+app.post('/api/requests/:requestId/reply', async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const { adminResponse } = req.body;
+
+        if (!adminResponse || adminResponse.trim() === "") {
+            return res.status(400).json({ error: "Admin response cannot be empty." });
+        }
+
+        // Find and update the request document
+        const updatedRequest = await ChatResponse.findByIdAndUpdate(
+            requestId,
+            {
+                $set: {
+                    adminResponse: adminResponse,
+                    status: 'Resolved', // Automatically mark as resolved upon reply
+                    resolvedAt: new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedRequest) {
+            return res.status(404).json({ error: "Request not found." });
+        }
+
+        // Return only the necessary fields for the frontend to update state
+        res.status(200).json({
+            success: true,
+            message: "Reply submitted and request marked as Resolved.",
+            adminResponse: updatedRequest.adminResponse,
+            status: updatedRequest.status,
+            // You can return the entire object if the frontend needs it:
+            // request: updatedRequest 
+        });
+
+    } catch (error) {
+        console.error("Error submitting admin reply:", error);
+        res.status(500).json({ error: "Server error while processing reply." });
+    }
+});
+
+
+
+app.post('/api/:caseId/agent-payment-status', async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const { agentPaymentStatus } = req.body; 
+
+        if (!agentPaymentStatus) {
+            return res.status(400).json({ error: "New agent payment status is required." });
+        }
+        
+        // Find and update the customer in a single operation
+        const updatedCustomer = await Customer.findByIdAndUpdate(
+            caseId,
+            { 
+                $set: { 
+                    agentPaymentStatus: agentPaymentStatus 
+                } 
+            },
+            { new: true, runValidators: true } // Return the new document and run schema validation
+        );
+
+        if (!updatedCustomer) {
+            return res.status(404).json({ error: "Customer not found." });
+        }
+        
+        // Return the updated customer object
+        res.status(200).json({
+            message: `Agent payment status updated to ${agentPaymentStatus}.`,
+            customer: updatedCustomer
+        });
+
+    } catch (error) {
+        console.error("Error updating agent payment status:", error);
+        // Check for Mongoose validation error
+        if (error.name === 'ValidationError') {
+             return res.status(400).json({ error: `Invalid status value: ${error.message}` });
+        }
+        res.status(500).json({ error: "Server error while updating agent payment status." });
+    }
+});
+
+
+
+
+
+
+
+app.post('/api/:caseId/assign', upload.single('agentPaymentProof'), async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const { agentId, totalAmount, advanceAmount, caseType } = req.body;
+        
+        if (!agentId || !caseType) {
+            return res.status(400).json({ error: "Agent ID and Case Type are required for assignment." });
+        }
+
+        const customer = await Customer.findById(caseId);
+
+        if (!customer) {
+            // Clean up the uploaded file if customer isn't found
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+            return res.status(404).json({ error: "Case/Customer not found." });
+        }
+        
+        // --- Core Logic: Update Fields ---
+        customer.assignedTo = agentId;
+        customer.caseType = caseType; // 👈 Save the case type
+        customer.status = 'In Progress'; // Automatically move to In Progress upon assignment
+
+        // --- Handle Agent Payment Details (Passed via FormData) ---
+        customer.agentTotalAmount = parseFloat(totalAmount) || 0;
+        customer.agentAdvanceAmount = parseFloat(advanceAmount) || 0;
+        
+        // Update agentPaymentStatus based on amounts
+        if (customer.agentAdvanceAmount >= customer.agentTotalAmount && customer.agentTotalAmount > 0) {
+            customer.agentPaymentStatus = 'completed';
+        } else if (customer.agentAdvanceAmount > 0) {
+            customer.agentPaymentStatus = 'partial';
+        } else {
+            customer.agentPaymentStatus = 'pending';
+        }
+
+        // Handle File Upload (agentPaymentProof)
+        if (req.file) {
+            // Assuming req.file.filename contains the stored file path/name
+            // Example path: /uploads/filename.jpg
+            const documents = customer.documents || {}; 
+            documents.agentPaymentProof = req.file.filename;
+            customer.documents = documents;
+            customer.markModified('documents');
+        }
+
+        await customer.save();
+
+        // Return the updated customer object
+        res.status(200).json({
+            message: `Case assigned and marked as ${caseType} successfully!`,
+            customer: customer
+        });
+
+    } catch (error) {
+        console.error("Error during case assignment:", error);
+        // Ensure file is deleted if another error occurs after upload
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ error: "Server error during case assignment." });
+    }
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

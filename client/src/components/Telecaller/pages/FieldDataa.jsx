@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { FaWhatsapp } from "react-icons/fa";
 
 const FieldDataa= () => {
   const [dataList, setDataList] = useState([]);
@@ -159,7 +160,7 @@ const FieldDataa= () => {
                         className="text-green-500 hover:text-green-700"
                         title="WhatsApp"
                       >
-                        💬
+                        <FaWhatsapp/>
                       </button>
                     </div>
                   </td>

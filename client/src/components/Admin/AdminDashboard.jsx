@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Pie } from "react-chartjs-2";
+import { Pie, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   ArcElement,
   Tooltip,
-  Legend
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
 } from "chart.js";
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 const statusColors = {
   Completed: "bg-green-600",
   "In Progress": "bg-yellow-500",
-  Pending: "bg-red-500"
+  Pending: "bg-red-500",
 };
 
 const AdminDashboard = () => {
@@ -25,10 +28,12 @@ const AdminDashboard = () => {
 
   const [caseStatusData, setCaseStatusData] = useState({});
   const [revenueExpenseData, setRevenueExpenseData] = useState({});
+  const [monthBarData, setMonthBarData] = useState({});
 
   useEffect(() => {
-    axios.get("http://localhost:5000/api/admin/stats")
-      .then(res => {
+    axios
+      .get("http://localhost:5000/api/admin/stats")
+      .then((res) => {
         const { callStats, dashboardStatsTop, dashboardStatsBottom, recentTransactions } = res.data;
 
         setCallStats(callStats || []);
@@ -38,7 +43,7 @@ const AdminDashboard = () => {
 
         // Pie chart for Case Status
         const caseCounts = { Completed: 0, "In Progress": 0, Pending: 0 };
-        (recentTransactions || []).forEach(txn => {
+        (recentTransactions || []).forEach((txn) => {
           if (txn.status in caseCounts) caseCounts[txn.status]++;
         });
 
@@ -48,14 +53,16 @@ const AdminDashboard = () => {
             {
               data: Object.values(caseCounts),
               backgroundColor: ["#16a34a", "#f59e0b", "#ef4444"],
-              hoverOffset: 4
-            }
-          ]
+              hoverOffset: 4,
+            },
+          ],
         });
 
         // Pie chart for Revenue vs Expense
-        const revenueStat = dashboardStatsTop.find(stat => stat.label === "Total Revenue")?.value.replace(/₹|,/g, '') || 0;
-        const expenseStat = dashboardStatsTop.find(stat => stat.label === "Total Expense")?.value.replace(/₹|,/g, '') || 0;
+        const revenueStat =
+          dashboardStatsTop.find((stat) => stat.label === "Total Revenue")?.value.replace(/₹|,/g, "") || 0;
+        const expenseStat =
+          dashboardStatsTop.find((stat) => stat.label === "Total Expense")?.value.replace(/₹|,/g, "") || 0;
 
         setRevenueExpenseData({
           labels: ["Revenue", "Expense"],
@@ -63,12 +70,36 @@ const AdminDashboard = () => {
             {
               data: [parseFloat(revenueStat), parseFloat(expenseStat)],
               backgroundColor: ["#2563eb", "#dc2626"],
-              hoverOffset: 4
-            }
-          ]
+              hoverOffset: 4,
+            },
+          ],
+        });
+
+        // Group amounts month-wise for Bar chart (Assuming txn.date and txn.amount exist)
+        const monthWiseTotals = {};
+        (recentTransactions || []).forEach((txn) => {
+          if (!txn.date || !txn.amount) return; // Defensive
+          const d = new Date(txn.date);
+          // Formatting month: e.g. "2025-09"
+          const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          monthWiseTotals[yearMonth] = (monthWiseTotals[yearMonth] || 0) + Number(txn.amount);
+        });
+
+        const months = Object.keys(monthWiseTotals).sort();
+        const amounts = months.map((m) => monthWiseTotals[m]);
+
+        setMonthBarData({
+          labels: months,
+          datasets: [
+            {
+              label: "Total Amount",
+              data: amounts,
+              backgroundColor: "#4f46e5",
+            },
+          ],
         });
       })
-      .catch(err => console.error("Error fetching dashboard data:", err))
+      .catch((err) => console.error("Error fetching dashboard data:", err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -120,8 +151,8 @@ const AdminDashboard = () => {
         ))}
       </div>
 
-      {/* Pie Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded shadow">
           <h2 className="text-xl font-semibold mb-4">Case Status Distribution</h2>
           <Pie data={caseStatusData} />
@@ -129,6 +160,10 @@ const AdminDashboard = () => {
         <div className="bg-white p-6 rounded shadow">
           <h2 className="text-xl font-semibold mb-4">Revenue vs Expenses</h2>
           <Pie data={revenueExpenseData} />
+        </div>
+        <div className="bg-white p-6 rounded shadow">
+          <h2 className="text-xl font-semibold mb-4">Monthly Total Amount</h2>
+          <Bar data={monthBarData} />
         </div>
       </div>
     </div>

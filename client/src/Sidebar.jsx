@@ -3,40 +3,46 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./Sidebar.css"; // Import the CSS file
 
 const menuItems = {
-  telecaller: [
-    { path: "/telecaller/dashboard", icon: "fa-home", label: "Dashboard" },
-    { path: "/telecaller/today-followup", icon: "fa-list", label: "Today's Follow-ups" },
-    { path: "/telecaller/followups", icon: "fa-list", label: "Follow-ups" },
-    { path: "/telecaller/call-logs", icon: "fa-phone", label: "Call Logs" },
-        { path: "/telecaller/field-data", icon: "fa-clipboard-list", label: "Field Data Collection" },
-    { path: "/telecaller/reports", icon: "fa-chart-bar", label: "Reports" },
-  ],
-  marketing: [
-    { path: "/marketing/dashboard", icon: "fa-home", label: "Dashboard" },
-    { path: "/marketing/field-data", icon: "fa-clipboard-list", label: "Field Data Collection" },
-    { path: "/marketing/Leads", icon: "fa-clipboard-list", label: "Leads" },
-    { path: "/marketing/expenses", icon: "fa-money-bill-wave", label: "Expense Tracking" },
-    { path: "/marketing/marketing-reports", icon: "fa-chart-bar", label: "Reports" },
-  ],
-  agent: [
-    { path: "/agent/dashboard", icon: "fa-home", label: "Dashboard" },
-    { path: "/agent/assigned-cases", icon: "fa-briefcase", label: "Assigned Cases" },
-    { path: "/agent/case-offers", icon: "fa-handshake", label: "Case Offers" },
-    { path: "/agent/payments", icon: "fa-money-bill-wave", label: "Payments" },
-  ],
-  admin: [
-    { path: "/admin/dashboard", icon: "fa-home", label: "Dashboard" },
-    { path: "/admin/all-cases", icon: "fa-briefcase", label: "All Cases" },
-    { path: "/admin/field-data", icon: "fa-clipboard-list", label: "Field Data Collection" },
-    { path: "/admin/Leadss", icon: "fa-clipboard-list", label: "Leads" },
-    { path: "/admin/financial-reports", icon: "fa-chart-line", label: "Financial Reports" },
-    { path: "/admin/Requests", icon: "fa-chart-line", label: "Requests" },
-    { path: "/admin/Attendence", icon: "fa-chart-line", label: "Attendence" },
-    { path: "/admin/telecaller", icon: "fa-clipboard-list", label: "Telecaller" },
-    { path: "/admin/marketing", icon: "fa-clipboard-list", label: "Marketing" },
-    { path: "/admin/agent", icon: "fa-clipboard-list", label: "agent" },
-    { path: "/admin/referral-management", icon: "fa-user-friends", label: "Referral Management" },
-  ],
+  telecaller: [
+    // Updated Icons for Telecaller
+    { path: "/telecaller/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" }, // fa-home -> fa-tachometer-alt
+    { path: "/telecaller/today-followup", icon: "fa-calendar-day", label: "Today's Follow-ups" }, // fa-list -> fa-calendar-day
+    { path: "/telecaller/followups", icon: "fa-clipboard-list", label: "All Follow-ups" }, // fa-list -> fa-clipboard-list
+    { path: "/telecaller/call-logs", icon: "fa-phone-volume", label: "Call Logs" }, // fa-phone -> fa-phone-volume
+    { path: "/telecaller/field-data", icon: "fa-map-marker-alt", label: "Field Data Collection" }, // fa-clipboard-list -> fa-map-marker-alt
+    { path: "/telecaller/reports", icon: "fa-chart-line", label: "Reports" }, // fa-chart-bar -> fa-chart-line
+  ],
+  marketing: [
+    // Updated Icons for Marketing
+    { path: "/marketing/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" }, // fa-home -> fa-tachometer-alt
+    { path: "/marketing/field-data", icon: "fa-street-view", label: "Field Data Collection" }, // fa-clipboard-list -> fa-street-view
+    { path: "/marketing/Leads", icon: "fa-bullseye", label: "Leads" }, // fa-clipboard-list -> fa-bullseye
+    { path: "/marketing/expenses", icon: "fa-file-invoice-dollar", label: "Expense Tracking" }, // fa-money-bill-wave -> fa-file-invoice-dollar
+    { path: "/marketing/marketing-reports", icon: "fa-chart-area", label: "Reports" }, // fa-chart-bar -> fa-chart-area
+  ],
+  agent: [
+    // Updated Icons for Agent
+    { path: "/agent/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" }, // fa-home -> fa-tachometer-alt
+    { path: "/agent/assigned-cases", icon: "fa-folder-open", label: "Assigned Cases" }, // fa-briefcase -> fa-folder-open
+    { path: "/agent/adminresponse", icon: "fa-reply", label: "Admin Response" }, // fa-briefcase -> fa-reply
+    { path: "/agent/case-offers", icon: "fa-hand-holding-usd", label: "Case Offers" }, // fa-handshake -> fa-hand-holding-usd
+    { path: "/agent/payments", icon: "fa-wallet", label: "Payments" }, // fa-money-bill-wave -> fa-wallet
+  ],
+  admin: [
+    // Updated Icons for Admin
+    { path: "/admin/dashboard", icon: "fa-user-cog", label: "Dashboard" }, // fa-home -> fa-user-cog
+    { path: "/admin/all-cases", icon: "fa-database", label: "All Cases" }, // fa-briefcase -> fa-database
+    { path: "/admin/field-data", icon: "fa-globe", label: "Field Data Collection" }, // fa-clipboard-list -> fa-globe
+    { path: "/admin/Leadss", icon: "fa-funnel-dollar", label: "Leads" }, // fa-clipboard-list -> fa-funnel-dollar
+    { path: "/admin/financial-reports", icon: "fa-balance-scale-right", label: "Financial Reports" }, // fa-chart-line -> fa-balance-scale-right
+    { path: "/admin/Requests", icon: "fa-inbox", label: "Requests" }, // fa-chart-line -> fa-inbox
+    { path: "/admin/ciblereport", icon: "fa-credit-card", label: "CIBIL Reports" }, // fa-chart-line -> fa-credit-card
+    { path: "/admin/Attendence", icon: "fa-user-check", label: "Attendance" }, // fa-chart-line -> fa-user-check
+    { path: "/admin/telecaller", icon: "fa-headset", label: "Telecallers" }, // fa-clipboard-list -> fa-headset
+    { path: "/admin/marketing", icon: "fa-megaphone", label: "Marketing Users" }, // fa-clipboard-list -> fa-megaphone
+    { path: "/admin/agent", icon: "fa-users-cog", label: "Agents" }, // fa-clipboard-list -> fa-users-cog
+    { path: "/admin/referral-management", icon: "fa-hands-helping", label: "Referral Management" }, // fa-user-friends -> fa-hands-helping
+  ],
 };
 
 const Sidebar = () => {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { FaWhatsapp } from 'react-icons/fa';
+import { FaWhatsapp, FaTimes } from 'react-icons/fa';
 
 const RequestTable = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [adminReply, setAdminReply] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -36,9 +38,48 @@ Status: ${request.status}`;
     return `https://wa.me/?text=${encodeURIComponent(msg)}`;
   };
 
-  if (loading) return <p className="text-center text-gray-500 mt-8">Loading requests...</p>;
-  if (error) return <p className="text-center text-red-500 mt-8">Error: {error}</p>;
-  if (requests.length === 0) return <p className="text-center text-gray-500 mt-8">No requests found.</p>;
+  const handleAdminReplySubmit = async () => {
+    if (!adminReply.trim()) {
+      alert("Reply cannot be empty");
+      return;
+    }
+    try {
+      setSubmittingReply(true);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`http://localhost:5000/api/requests/${selectedRequest._id}/reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ adminResponse: adminReply.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to submit reply");
+
+      setRequests((prev) =>
+        prev.map((req) =>
+          req._id === selectedRequest._id ? { ...req, adminResponse: data.adminResponse } : req
+        )
+      );
+
+      setSelectedRequest((prev) => ({ ...prev, adminResponse: data.adminResponse }));
+      setAdminReply("");
+      alert("Reply submitted successfully");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  if (loading)
+    return <p className="text-center text-gray-500 mt-8">Loading requests...</p>;
+  if (error)
+    return <p className="text-center text-red-500 mt-8">Error: {error}</p>;
+  if (requests.length === 0)
+    return <p className="text-center text-gray-500 mt-8">No requests found.</p>;
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -48,7 +89,7 @@ Status: ${request.status}`;
         <thead className="bg-gray-100">
           <tr>
             <th className="border border-gray-300 px-4 py-2 text-left">Request ID</th>
-            <th className="border border-gray-300 px-4 py-2 text-left">case Id</th>
+            <th className="border border-gray-300 px-4 py-2 text-left">Case Id</th>
             <th className="border border-gray-300 px-4 py-2 text-left">Agent</th>
             <th className="border border-gray-300 px-4 py-2 text-left">Status</th>
             <th className="border border-gray-300 px-4 py-2 text-left">Message</th>
@@ -70,7 +111,10 @@ Status: ${request.status}`;
               </td>
               <td className="border border-gray-300 px-4 py-2 flex justify-center space-x-4">
                 <button
-                  onClick={() => setSelectedRequest(req)}
+                  onClick={() => {
+                    setSelectedRequest(req);
+                    setAdminReply(req.adminResponse || "");
+                  }}
                   className="px-3 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded-md"
                   title="View Details"
                 >
@@ -108,8 +152,14 @@ Status: ${request.status}`;
               <p><strong>ID:</strong> {selectedRequest._id}</p>
               <p><strong>Message:</strong> {selectedRequest.message}</p>
               <p><strong>Status:</strong> {selectedRequest.status}</p>
-              <p><strong>Admin Response:</strong> {selectedRequest.adminResponse || 'None'}</p>
-              <p><strong>Timestamp:</strong> {new Date(selectedRequest.timestamp).toLocaleString()}</p>
+              <p><strong>Admin Response:</strong></p>
+              {selectedRequest.adminResponse ? (
+                <div className="p-3 bg-green-50 border border-green-300 rounded text-green-700 mb-4">
+                  {selectedRequest.adminResponse}
+                </div>
+              ) : (
+                <p className="text-gray-500 italic mb-4">No admin response yet.</p>
+              )}
             </section>
 
             <section className="mb-6">
@@ -146,6 +196,27 @@ Status: ${request.status}`;
               ) : (
                 <p>No agent details available</p>
               )}
+            </section>
+
+            {/* Reply textarea */}
+            <section className="mb-6">
+              <h3 className="text-xl font-semibold mb-2">Reply to Request</h3>
+              <textarea
+                rows={4}
+                className="w-full border border-gray-300 rounded-md p-2 mb-4"
+                value={adminReply}
+                onChange={(e) => setAdminReply(e.target.value)}
+                placeholder="Write your response here..."
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleAdminReplySubmit}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  disabled={submittingReply}
+                >
+                  {submittingReply ? "Submitting..." : "Submit Reply"}
+                </button>
+              </div>
             </section>
 
             <div className="flex justify-end">
