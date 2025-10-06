@@ -691,9 +691,7 @@ const Followups = () => {
                           title="Call"
                         >
                           <FaPhone className="text-sm sm:text-base" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                            Call
-                          </div>
+                       
                         </button>
                         <button
                           onClick={() => handleMessage(f.phone)}
@@ -701,9 +699,7 @@ const Followups = () => {
                           title="WhatsApp"
                         >
                           <FaWhatsapp size={15} className="sm:size-[17px]" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                            WhatsApp
-                          </div>
+                        
                         </button>
                         
                         {/* View Details Button - Available for all leads */}
@@ -713,9 +709,7 @@ const Followups = () => {
                           title="View Lead Details"
                         >
                           <FaEye size={16} className="sm:size-[18px]" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                            View Details
-                          </div>
+                       
                         </button>
 
                         {/* Edit Lead Button - Available for all leads */}
@@ -725,9 +719,7 @@ const Followups = () => {
                           title="Edit Lead Details"
                         >
                           <FaEdit size={16} className="sm:size-[18px]" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                            Edit Lead
-                          </div>
+
                         </button>
 
                         {/* Convert to Customer Button - Only for Success status */}
@@ -738,9 +730,7 @@ const Followups = () => {
                             title="Convert to Customer"
                           >
                             <FaUserPlus size={16} className="sm:size-[18px]" />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                              Convert to Customer
-                            </div>
+                           
                           </button>
                         )}
                       </div>

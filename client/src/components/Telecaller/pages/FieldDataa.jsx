@@ -2,10 +2,15 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaWhatsapp } from "react-icons/fa";
 
-const FieldDataa= () => {
+const FieldDataa = () => {
   const [dataList, setDataList] = useState([]);
+  const [filteredList, setFilteredList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
+
+  // Filter state
+  const [executives, setExecutives] = useState([]);
+  const [selectedExecutive, setSelectedExecutive] = useState("");
 
   // Call modal states
   const [callingCustomer, setCallingCustomer] = useState(null);
@@ -19,15 +24,34 @@ const FieldDataa= () => {
     fetchDataList();
   }, []);
 
+  // Fetch field data
   const fetchDataList = async () => {
     setLoading(true);
     try {
       const response = await axios.get("http://localhost:5000/api/field-data");
-      setDataList(response.data || []);
+      const data = response.data || [];
+      setDataList(data);
+      setFilteredList(data);
+
+      // Extract unique executive codes for filter dropdown
+      const uniqueExecutives = [...new Set(data.map((item) => item.executiveCode).filter(Boolean))];
+      setExecutives(uniqueExecutives);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Filter by executive
+  const handleExecutiveFilter = (e) => {
+    const value = e.target.value;
+    setSelectedExecutive(value);
+    if (value === "") {
+      setFilteredList(dataList);
+    } else {
+      const filtered = dataList.filter((item) => item.executiveCode === value);
+      setFilteredList(filtered);
     }
   };
 
@@ -51,9 +75,8 @@ const FieldDataa= () => {
   const handleStatusChange = async (id, status) => {
     try {
       await axios.put(`http://localhost:5000/api/field-data/${id}/status`, { status });
-      setDataList((prev) =>
-        prev.map((item) => (item._id === id ? { ...item, status } : item))
-      );
+      setDataList((prev) => prev.map((item) => (item._id === id ? { ...item, status } : item)));
+      setFilteredList((prev) => prev.map((item) => (item._id === id ? { ...item, status } : item)));
       setEditingStatus(null);
     } catch (error) {
       console.error("Error updating status:", error);
@@ -93,10 +116,26 @@ const FieldDataa= () => {
     <div className="p-6 max-w-7xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Follow-ups / Field Data</h2>
 
+      {/* Executive Filter */}
+      <div className="flex justify-end mb-4">
+        <select
+          value={selectedExecutive}
+          onChange={handleExecutiveFilter}
+          className="border border-gray-300 rounded px-3 py-2"
+        >
+          <option value="">All Executives</option>
+          {executives.map((exe) => (
+            <option key={exe} value={exe}>
+              {exe}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="overflow-x-auto bg-white rounded shadow p-6">
         {loading ? (
           <p className="text-center text-gray-600">Loading data...</p>
-        ) : dataList.length === 0 ? (
+        ) : filteredList.length === 0 ? (
           <p className="text-center text-gray-500">No entries found.</p>
         ) : (
           <table className="min-w-full border border-gray-200">
@@ -115,7 +154,7 @@ const FieldDataa= () => {
               </tr>
             </thead>
             <tbody>
-              {dataList.map((item) => (
+              {filteredList.map((item) => (
                 <tr key={item._id} className="hover:bg-gray-50">
                   <td className="border px-4 py-2">{item._id}</td>
                   <td className="border px-4 py-2">{item.bankName}</td>
@@ -160,7 +199,7 @@ const FieldDataa= () => {
                         className="text-green-500 hover:text-green-700"
                         title="WhatsApp"
                       >
-                        <FaWhatsapp/>
+                        <FaWhatsapp />
                       </button>
                     </div>
                   </td>
@@ -181,7 +220,9 @@ const FieldDataa= () => {
             className="bg-white rounded-lg p-6 max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-xl font-semibold mb-4">Call Feedback: {callingCustomer.managerName}</h3>
+            <h3 className="text-xl font-semibold mb-4">
+              Call Feedback: {callingCustomer.managerName}
+            </h3>
             <div className="mb-4">
               <label className="font-semibold block mb-1">Call Status</label>
               <select

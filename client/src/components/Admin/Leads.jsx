@@ -1,20 +1,30 @@
 import React, { useState, useEffect } from "react";
-import { FaPhone, FaWhatsapp } from "react-icons/fa";
+import { FaPhone, FaWhatsapp, FaSyncAlt } from "react-icons/fa";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
 const statusColors = {
   Pending: "bg-red-200 text-red-800",
-  Completed: "bg-green-200 text-green-800",
-  Rejected: "bg-yellow-200 text-yellow-800",
+  Success: "bg-green-200 text-green-800",
+  "Call Back": "bg-yellow-200 text-yellow-800",
 };
+
 
 const LeadsAdmin = () => {
   const [leads, setLeads] = useState([]);
+  const [filteredLeads, setFilteredLeads] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [addLeadModal, setAddLeadModal] = useState(false);
   const [messageHistory, setMessageHistory] = useState([]);
+
+  // ✅ Filter states
+  const [filters, setFilters] = useState({
+    status: "",
+    village: "",
+    issueType: "",
+    search: "",
+  });
 
   const [newLead, setNewLead] = useState({
     name: "",
@@ -24,6 +34,7 @@ const LeadsAdmin = () => {
     status: "Pending",
   });
 
+  // ✅ Fetch Leads
   const fetchLeads = async () => {
     setLoading(true);
     setError(null);
@@ -32,6 +43,7 @@ const LeadsAdmin = () => {
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
       setLeads(data || []);
+      setFilteredLeads(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -43,11 +55,13 @@ const LeadsAdmin = () => {
     fetchLeads();
   }, []);
 
+  // ✅ Handle input for new lead
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewLead((prev) => ({ ...prev, [name]: value }));
   };
 
+  // ✅ Add new lead
   const handleAddLead = async () => {
     if (!newLead.name || !newLead.phone) {
       alert("Please enter Name and Phone");
@@ -68,6 +82,7 @@ const LeadsAdmin = () => {
       if (!res.ok) throw new Error("Failed to add lead");
       const savedLead = await res.json();
       setLeads((prev) => [savedLead, ...prev]);
+      setFilteredLeads((prev) => [savedLead, ...prev]);
       setNewLead({
         name: "",
         phone: "",
@@ -81,6 +96,7 @@ const LeadsAdmin = () => {
     }
   };
 
+  // ✅ Call & WhatsApp actions
   const handleCall = (phone) => {
     window.open(`tel:${phone}`, "_blank");
   };
@@ -88,16 +104,43 @@ const LeadsAdmin = () => {
   const handleWhatsApp = (lead) => {
     const phone = lead.phone.replace(/\D/g, "");
     window.open(`https://wa.me/${phone}`, "_blank");
-
-    // Save to message history
     setMessageHistory((prev) => [
       ...prev,
       { id: lead._id, name: lead.name, message: `Contacted on WhatsApp: ${phone}` },
     ]);
   };
 
+  // ✅ Apply Filters
+  const applyFilters = () => {
+    let result = leads;
+
+    if (filters.status) result = result.filter((l) => l.status === filters.status);
+    if (filters.village)
+      result = result.filter((l) =>
+        l.village?.toLowerCase().includes(filters.village.toLowerCase())
+      );
+    if (filters.issueType)
+      result = result.filter((l) =>
+        l.issueType?.toLowerCase().includes(filters.issueType.toLowerCase())
+      );
+    if (filters.search)
+      result = result.filter(
+        (l) =>
+          l.name?.toLowerCase().includes(filters.search.toLowerCase()) ||
+          l.phone?.includes(filters.search)
+      );
+
+    setFilteredLeads(result);
+  };
+
+  // ✅ Reset Filters
+  const resetFilters = () => {
+    setFilters({ status: "", village: "", issueType: "", search: "" });
+    setFilteredLeads(leads);
+  };
+
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold">Leads / Follow-ups</h2>
         <button
@@ -108,6 +151,70 @@ const LeadsAdmin = () => {
         </button>
       </div>
 
+      {/* ✅ Filters Section */}
+      <div className="bg-gray-100 p-4 rounded-lg mb-6 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-sm font-medium mb-1">Status</label>
+        <select
+  value={filters.status}
+  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+  className="border border-gray-300 rounded px-3 py-2 w-40"
+>
+  <option value="">All</option>
+  <option value="Pending">Pending</option>
+  <option value="Success">Success</option>
+  <option value="Call Back">Call Back</option>
+</select>
+
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Village</label>
+          <input
+            value={filters.village}
+            onChange={(e) => setFilters({ ...filters, village: e.target.value })}
+            placeholder="Enter village"
+            className="border border-gray-300 rounded px-3 py-2 w-48"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Issue Type</label>
+          <input
+            value={filters.issueType}
+            onChange={(e) => setFilters({ ...filters, issueType: e.target.value })}
+            placeholder="Enter issue type"
+            className="border border-gray-300 rounded px-3 py-2 w-48"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Search</label>
+          <input
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            placeholder="Search by name or phone"
+            className="border border-gray-300 rounded px-3 py-2 w-60"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={applyFilters}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Apply Filters
+          </button>
+          <button
+            onClick={resetFilters}
+            className="flex items-center gap-1 border px-4 py-2 rounded hover:bg-gray-200"
+          >
+            <FaSyncAlt /> Reset
+          </button>
+        </div>
+      </div>
+
+      {/* ✅ Leads Table */}
       {loading && <p>Loading leads...</p>}
       {error && <p className="text-red-600">{error}</p>}
 
@@ -123,14 +230,14 @@ const LeadsAdmin = () => {
             </tr>
           </thead>
           <tbody>
-            {leads.length === 0 ? (
+            {filteredLeads.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-center p-4">
                   No leads found.
                 </td>
               </tr>
             ) : (
-              leads.map((lead) => (
+              filteredLeads.map((lead) => (
                 <tr key={lead._id} className="hover:bg-gray-50">
                   <td className="border border-gray-300 px-4 py-2">{lead.time}</td>
                   <td className="border border-gray-300 px-4 py-2">{lead.name}</td>
@@ -152,16 +259,13 @@ const LeadsAdmin = () => {
                         onClick={() => handleCall(lead.phone)}
                         className="text-green-600 hover:text-green-800"
                         title="Call"
-                        aria-label="Call"
                       >
-                       <FaPhone />
+                        <FaPhone />
                       </button>
-
                       <button
                         onClick={() => handleWhatsApp(lead)}
                         className="text-green-500 hover:text-green-700"
                         title="WhatsApp"
-                        aria-label="WhatsApp"
                       >
                         <FaWhatsapp size={17} />
                       </button>
@@ -174,6 +278,7 @@ const LeadsAdmin = () => {
         </table>
       )}
 
+      {/* ✅ Message History */}
       {messageHistory.length > 0 && (
         <div className="mt-8 p-4 bg-gray-100 rounded-md max-w-3xl mx-auto">
           <h3 className="text-lg font-semibold mb-3">WhatsApp Message History</h3>
@@ -187,6 +292,7 @@ const LeadsAdmin = () => {
         </div>
       )}
 
+      {/* ✅ Add Lead Modal */}
       {addLeadModal && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"

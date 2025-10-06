@@ -10,6 +10,7 @@ const menuItems = {
     { path: "/telecaller/followups", icon: "fa-clipboard-list", label: "All Follow-ups" }, // fa-list -> fa-clipboard-list
     { path: "/telecaller/call-logs", icon: "fa-phone-volume", label: "Call Logs" }, // fa-phone -> fa-phone-volume
     { path: "/telecaller/field-data", icon: "fa-map-marker-alt", label: "Field Data Collection" }, // fa-clipboard-list -> fa-map-marker-alt
+    { path: "/telecaller/expenses", icon: "fa-file-invoice-dollar", label: "Expense Tracking" }, // fa-money-bill-wave -> fa-file-invoice-dollar
     { path: "/telecaller/reports", icon: "fa-chart-line", label: "Reports" }, // fa-chart-bar -> fa-chart-line
   ],
   marketing: [
@@ -21,15 +22,13 @@ const menuItems = {
     { path: "/marketing/marketing-reports", icon: "fa-chart-area", label: "Reports" }, // fa-chart-bar -> fa-chart-area
   ],
   agent: [
-    // Updated Icons for Agent
     { path: "/agent/dashboard", icon: "fa-tachometer-alt", label: "Dashboard" }, // fa-home -> fa-tachometer-alt
     { path: "/agent/assigned-cases", icon: "fa-folder-open", label: "Assigned Cases" }, // fa-briefcase -> fa-folder-open
     { path: "/agent/adminresponse", icon: "fa-reply", label: "Admin Response" }, // fa-briefcase -> fa-reply
     { path: "/agent/case-offers", icon: "fa-hand-holding-usd", label: "Case Offers" }, // fa-handshake -> fa-hand-holding-usd
-    { path: "/agent/payments", icon: "fa-wallet", label: "Payments" }, // fa-money-bill-wave -> fa-wallet
   ],
   admin: [
-    // Updated Icons for Admin
+ 
     { path: "/admin/dashboard", icon: "fa-user-cog", label: "Dashboard" }, // fa-home -> fa-user-cog
     { path: "/admin/all-cases", icon: "fa-database", label: "All Cases" }, // fa-briefcase -> fa-database
     { path: "/admin/field-data", icon: "fa-globe", label: "Field Data Collection" }, // fa-clipboard-list -> fa-globe

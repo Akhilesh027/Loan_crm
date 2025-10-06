@@ -19,7 +19,8 @@ import {
   FaUser,
   FaCalendar,
   FaSearch,
-  FaFilter
+  FaFilter,
+  FaTag
 } from "react-icons/fa";
 
 // ====================================================================
@@ -32,6 +33,7 @@ const statusColors = {
   "Customer Pending": "bg-orange-100 text-orange-800 border border-orange-300",
   "Agent Pending": "bg-blue-100 text-blue-800 border border-blue-300",
   "Admin Pending": "bg-rose-100 text-rose-800 border border-rose-300",
+  "new": "bg-gray-100 text-gray-800 border border-gray-300",
 };
 
 const bankStatusColors = {
@@ -46,6 +48,11 @@ const priorityColors = {
   Medium: "bg-amber-100 text-amber-800 border border-amber-300",
   Low: "bg-emerald-100 text-emerald-800 border border-emerald-300",
   Normal: "bg-blue-100 text-blue-800 border border-blue-300",
+};
+
+const caseTypeColors = {
+  normal: "bg-blue-100 text-blue-800 border border-blue-300",
+  cibil: "bg-purple-100 text-purple-800 border border-purple-300",
 };
 
 // Utility: Calculate days since assigned
@@ -105,6 +112,17 @@ const DocumentPreview = ({ label, url }) => {
         </a>
       )}
     </div>
+  );
+};
+
+// Case Type Badge Component
+const CaseTypeBadge = ({ caseType }) => {
+  const displayText = caseType === 'cibil' ? 'CIBIL' : 'Normal';
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${caseTypeColors[caseType] || caseTypeColors.normal}`}>
+      <FaTag className="w-3 h-3 mr-1" />
+      {displayText}
+    </span>
   );
 };
 
@@ -222,8 +240,12 @@ const AssignedCases = () => {
   const [cibilCaseId, setCibilCaseId] = useState(null);
   const [uploadingCibil, setUploadingCibil] = useState(false);
   const [bankStatusUpdate, setBankStatusUpdate] = useState({ bankName: null, status: "" });
+  
+  // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [caseTypeFilter, setCaseTypeFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("all");
 
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("authToken");
@@ -350,7 +372,7 @@ const AssignedCases = () => {
     }
   };
 
-  // Filter cases based on search and status
+  // Filter cases based on search, status, and case type
   const filteredCases = cases.filter(caseItem => {
     const matchesSearch = 
       caseItem.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -359,9 +381,31 @@ const AssignedCases = () => {
       caseItem.problem?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === "all" || caseItem.status === statusFilter;
+    const matchesCaseType = caseTypeFilter === "all" || caseItem.caseType === caseTypeFilter;
     
-    return matchesSearch && matchesStatus;
+    // Tab filtering
+    let matchesTab = true;
+    if (activeTab === "normal") {
+      matchesTab = caseItem.caseType === "normal";
+    } else if (activeTab === "cibil") {
+      matchesTab = caseItem.caseType === "cibil";
+    } else if (activeTab === "active") {
+      matchesTab = caseItem.status === "In Progress" || caseItem.status === "Agent Pending" || caseItem.status === "Customer Pending";
+    } else if (activeTab === "completed") {
+      matchesTab = caseItem.status === "Solved";
+    }
+    
+    return matchesSearch && matchesStatus && matchesCaseType && matchesTab;
   });
+
+  // Get case type counts for tabs
+  const caseTypeCounts = {
+    all: cases.length,
+    normal: cases.filter(c => c.caseType === "normal").length,
+    cibil: cases.filter(c => c.caseType === "cibil").length,
+    active: cases.filter(c => c.status === "In Progress" || c.status === "Agent Pending" || c.status === "Customer Pending").length,
+    completed: cases.filter(c => c.status === "Solved").length,
+  };
 
   // Existing handlers
   const handleLogout = () => {
@@ -452,23 +496,6 @@ const AssignedCases = () => {
     }
   };
 
-  const fetchChatRequests = async (caseId) => {
-    try {
-      const token = localStorage.getItem("authToken");
-      const response = await fetch(`http://localhost:5000/api/customers/${caseId}/requests`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) throw new Error("Failed to fetch chat requests");
-
-      const data = await response.json();
-      setChatRequests(data.requests || []);
-      setShowRequests(true);
-    } catch (err) {
-      showNotification(err.message, false);
-    }
-  };
-
   // Loading state
   if (loading)
     return (
@@ -539,10 +566,43 @@ const AssignedCases = () => {
           </div>
         )}
 
+        {/* Tabs Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 border border-gray-200">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: "all", label: "All Cases", count: caseTypeCounts.all },
+              { id: "normal", label: "Normal Cases", count: caseTypeCounts.normal },
+              { id: "cibil", label: "CIBIL Cases", count: caseTypeCounts.cibil },
+              { id: "active", label: "Active", count: caseTypeCounts.active },
+              { id: "completed", label: "Completed", count: caseTypeCounts.completed },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  activeTab === tab.id
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
+                  activeTab === tab.id
+                    ? "bg-white text-blue-600"
+                    : "bg-gray-300 text-gray-700"
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Search and Filter Section */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Search Input */}
+            <div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FaSearch className="text-gray-400" />
@@ -556,7 +616,9 @@ const AssignedCases = () => {
                 />
               </div>
             </div>
-            <div className="lg:w-48">
+            
+            {/* Status Filter */}
+            <div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FaFilter className="text-gray-400" />
@@ -572,6 +634,25 @@ const AssignedCases = () => {
                   <option value="Customer Pending">Customer Pending</option>
                   <option value="Agent Pending">Agent Pending</option>
                   <option value="Admin Pending">Admin Pending</option>
+                  <option value="new">New</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Case Type Filter */}
+            <div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FaTag className="text-gray-400" />
+                </div>
+                <select
+                  value={caseTypeFilter}
+                  onChange={(e) => setCaseTypeFilter(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                >
+                  <option value="all">All Case Types</option>
+                  <option value="normal">Normal</option>
+                  <option value="cibil">CIBIL</option>
                 </select>
               </div>
             </div>
@@ -583,7 +664,10 @@ const AssignedCases = () => {
           <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="text-2xl font-bold text-gray-800">
-                Assigned Cases
+                {activeTab === 'all' ? 'All Cases' : 
+                 activeTab === 'normal' ? 'Normal Cases' :
+                 activeTab === 'cibil' ? 'CIBIL Cases' :
+                 activeTab === 'active' ? 'Active Cases' : 'Completed Cases'}
                 <span className="ml-3 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium border border-blue-200">
                   {filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'}
                 </span>
@@ -601,19 +685,21 @@ const AssignedCases = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-700 mb-2">No Cases Found</h3>
               <p className="text-gray-500 mb-6">
-                {searchTerm || statusFilter !== "all" 
+                {searchTerm || statusFilter !== "all" || caseTypeFilter !== "all" 
                   ? "No cases match your current filters." 
                   : "No cases have been assigned to you yet."}
               </p>
-              {(searchTerm || statusFilter !== "all") && (
+              {(searchTerm || statusFilter !== "all" || caseTypeFilter !== "all") && (
                 <button
                   onClick={() => {
                     setSearchTerm("");
                     setStatusFilter("all");
+                    setCaseTypeFilter("all");
+                    setActiveTab("all");
                   }}
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  Clear filters
+                  Clear all filters
                 </button>
               )}
             </div>
@@ -625,6 +711,7 @@ const AssignedCases = () => {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Case Details</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Customer</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Problem</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Case Type</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Timeline</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
@@ -641,7 +728,7 @@ const AssignedCases = () => {
                           <div className="flex items-center mt-1">
                             <FaCalendar className="w-3 h-3 text-gray-400 mr-1" />
                             <span className="text-xs text-gray-500">
-                              {new Date(c.assignedDate).toLocaleDateString()}
+                              {new Date(c.assignedDate || c.createdAt).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
@@ -675,6 +762,9 @@ const AssignedCases = () => {
                             {c.priority} Priority
                           </span>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <CaseTypeBadge caseType={c.caseType || 'normal'} />
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -866,6 +956,7 @@ const AssignedCases = () => {
                   { label: "Aadhaar Number", value: selectedCase.aadhaar || "-", icon: <FaIdCard className="text-orange-500" /> },
                   { label: "PAN Number", value: selectedCase.pan || "-", icon: <FaIdCard className="text-red-500" /> },
                   { label: "Case ID", value: selectedCase.caseId || "-", icon: <FaFileAlt className="text-indigo-500" /> },
+                  { label: "Case Type", value: selectedCase.caseType || "normal", icon: <FaTag className="text-blue-500" /> },
                   { label: "Priority", value: selectedCase.priority || "-", icon: <FaExclamationTriangle className="text-amber-500" /> },
                   { label: "Page Number", value: selectedCase.pageNumber || "-", icon: <FaFileAlt className="text-gray-500" /> },
                   { label: "Telecaller Name", value: selectedCase.telecallerName || "-", icon: <FaUser className="text-cyan-500" /> },
@@ -875,7 +966,11 @@ const AssignedCases = () => {
                       {item.icon}
                       <p className="text-sm font-semibold text-gray-600 ml-2">{item.label}</p>
                     </div>
-                    <p className="font-medium text-gray-900 text-lg">{item.value}</p>
+                    {item.label === "Case Type" ? (
+                      <CaseTypeBadge caseType={item.value} />
+                    ) : (
+                      <p className="font-medium text-gray-900 text-lg">{item.value}</p>
+                    )}
                   </div>
                 ))}
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-200 shadow-sm">

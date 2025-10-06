@@ -750,9 +750,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                             title="View Details"
                           >
                             <FaEye />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                              View Details
-                            </div>
+                       
                           </button>
                           
                           <button
@@ -761,9 +759,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                             title="Log Call"
                           >
                             <FaPhone />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                              Log Call
-                            </div>
+                       
                           </button>
                            
                           <button
@@ -772,9 +768,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                             title="Call History"
                           >
                             <FaHistory />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                              Call History
-                            </div>
+                       
                           </button>
                           
                           {!c.assignedTo && c.status !== "Solved" && (
@@ -784,9 +778,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                               title="Assign Officer"
                             >
                               <FaUserPlus />
-                              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                Assign Officer
-                              </div>
+                          
                             </button>
                           )}
                           
@@ -797,9 +789,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                               title="Complete Case"
                             >
                               <FaCheckCircle />
-                              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                Complete Case
-                              </div>
+                       
                             </button>
                           )}
                           
@@ -815,9 +805,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                               title="Add Payment Details"
                             >
                               <FaMoneyBillWave />
-                              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                                Add Payment
-                              </div>
+                       
                             </button>
                           )}
                           
@@ -827,9 +815,7 @@ const updateAgentPaymentStatus = async (caseId) => {
                             title="Edit Customer"
                           >
                             <FaEdit />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                              Edit Customer
-                            </div>
+                           
                           </button>
                         </div>
                       </td>
@@ -1199,106 +1185,7 @@ const updateAgentPaymentStatus = async (caseId) => {
       </Modal>
 
       {/* Edit Modal */}
-      <Modal 
-        isOpen={showEditModal} 
-        onClose={() => setShowEditModal(false)} 
-        title="Edit Case Details"
-        size="lg"
-      >
-        {editCase && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField
-              label="Customer Name"
-              name="name"
-              value={editCase.name}
-              onChange={handleEditChange}
-              placeholder="Customer Name"
-            />
-            
-            <InputField
-              label="Phone"
-              name="phone"
-              value={editCase.phone}
-              onChange={handleEditChange}
-              placeholder="Phone"
-            />
-            
-            <InputField
-              label="Email"
-              name="email"
-              value={editCase.email}
-              onChange={handleEditChange}
-              placeholder="Email"
-            />
-            
-            <InputField
-              label="Problem"
-              name="problem"
-              value={editCase.problem}
-              onChange={handleEditChange}
-              placeholder="Problem"
-            />
-            
-            <InputField
-              label="Bank"
-              name="bank"
-              value={editCase.bank}
-              onChange={handleEditChange}
-              placeholder="Bank"
-            />
-            
-            <InputField
-              label="Loan Type"
-              name="loanType"
-              value={editCase.loanType}
-              onChange={handleEditChange}
-              placeholder="Loan Type"
-            />
-            
-            <InputField
-              label="Amount"
-              name="amount"
-              type="number"
-              value={editCase.amount || ""}
-              onChange={handleEditChange}
-              placeholder="Amount"
-            />
-            
-            <InputField
-              label="CIBIL Before"
-              name="cibilBefore"
-              type="number"
-              value={editCase.cibilBefore || ""}
-              onChange={handleEditChange}
-              placeholder="CIBIL Before"
-            />
-            
-            <InputField
-              label="CIBIL After"
-              name="cibilAfter"
-              type="number"
-              value={editCase.cibilAfter || ""}
-              onChange={handleEditChange}
-              placeholder="CIBIL After"
-            />
-            
-            <div className="md:col-span-2 flex justify-end space-x-3 pt-6 border-t border-gray-200">
-              <button 
-                onClick={() => setShowEditModal(false)} 
-                className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 font-semibold"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={saveEditedCase} 
-                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl hover:from-indigo-600 hover:to-indigo-700 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+   
 
       {/* View Modal */}
       <Modal 

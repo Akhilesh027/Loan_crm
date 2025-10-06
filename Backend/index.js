@@ -1338,13 +1338,17 @@ const successCalls = await Followup.countDocuments({
 app.get('/api/admin/stats', async (req, res) => {
   try {
     // Today's date range
-  
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Dashboard stats
     const totalCustomers = await Customer.countDocuments();
     const activeCases = await Followup.countDocuments({ status: 'Active' });
     const totalCases = await Followup.countDocuments();
     const pendingCases = await Followup.countDocuments({ status: 'Pending' });
+    const cibleCases = await Followup.countDocuments({ status: 'Cible' });
 
     // Offer stats
     const totalRevenueAgg = await Offer.aggregate([{ $group: { _id: null, total: { $sum: "$dealAmount" } } }]);
@@ -1374,18 +1378,39 @@ app.get('/api/admin/stats', async (req, res) => {
       .populate('officer', 'name')
       .populate('customer', 'name');
 
-    res.json({
+    // Call statistics for today
+    const totalCallsToday = await Calllog.countDocuments({
+      createdAt: { $gte: today, $lt: tomorrow }
+    });
     
+    const successfulCallsToday = await Calllog.countDocuments({
+      createdAt: { $gte: today, $lt: tomorrow },
+      status: 'successful'
+    });
+    
+    const missedCallsToday = await Calllog.countDocuments({
+      createdAt: { $gte: today, $lt: tomorrow },
+      status: 'missed'
+    });
+    
+    const failedCallsToday = await Calllog.countDocuments({
+      createdAt: { $gte: today, $lt: tomorrow },
+      status: 'failed'
+    });
+
+    res.json({
+     
       dashboardStatsTop: [
         { icon: "fa-users", label: "Total Customers", value: totalCustomers },
         { icon: "fa-briefcase", label: "Active Cases", value: activeCases },
         { icon: "fa-briefcase", label: "Total Cases", value: totalCases },
         { icon: "fa-briefcase", label: "Pending Cases", value: pendingCases },
+        { icon: "fa-bullseye", label: "Cible Cases", value: cibleCases },
         { icon: "fa-money-bill-wave", label: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}` },
         { icon: "fa-money-bill-wave", label: "Advance Received", value: `₹${advanceReceived.toLocaleString()}` },
         { icon: "fa-money-bill-wave", label: "Pending Amount", value: `₹${pendingAmount.toLocaleString()}` },
         { icon: "fa-money-bill-wave", label: "Total Expense", value: `₹${totalExpense.toLocaleString()}` },
-        { icon: "fa-profit", label: "Total Profit", value: `₹${totalProfit.toLocaleString()}` }
+        { icon: "fa-chart-line", label: "Total Profit", value: `₹${totalProfit.toLocaleString()}` }
       ],
       dashboardStatsBottom: [
         { icon: "fa-user-tie", label: "Agent", value: officers },
@@ -1400,7 +1425,8 @@ app.get('/api/admin/stats', async (req, res) => {
         officer: trx.officer?.name || "Unknown",
         amount: trx.amount || 0,
         profit: trx.profit || 0,
-        status: trx.status || "N/A"
+        status: trx.status || "N/A",
+        date: trx.createdAt || new Date()
       }))
     });
   } catch (error) {
@@ -1410,59 +1436,177 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 app.get("/api/agent/stats/:officerId", async (req, res) => {
   try {
-    const officerId = req.query.officerId;
-    // Stats aggregation
-    const assignedCasesCount = await Customer.countDocuments({ officer: officerId });
-    const solvedCasesCount = await Customer.countDocuments({ officer: officerId, status: "Solved" });
-    const pendingCasesCount = await Customer.countDocuments({ officer: officerId, status: "In Progress" });
+    const officerId = req.params.officerId;
     
-    const totalRevenueAgg = await Offer.aggregate([
-      { $group: { _id: null, total: { $sum: "$dealAmount" } } },
-    ]);
-    const totalRevenue = totalRevenueAgg[0]?.total || 0;
+    if (!officerId) {
+      return res.status(400).json({ error: "Officer ID is required" });
+    }
 
-    const pendingAmountAgg = await Offer.aggregate([
-      { $group: { _id: null, total: { $sum: "$pendingAmount" } } },
+    // Stats aggregation for cases
+    const assignedCasesCount = await Customer.countDocuments({ assignedTo: officerId });
+    const solvedCasesCount = await Customer.countDocuments({ 
+      assignedTo: officerId, 
+      status: "Solved" 
+    });
+    const pendingCasesCount = await Customer.countDocuments({ 
+      assignedTo: officerId, 
+      status: { $in: ["Pending", "Customer Pending", "Agent Pending", "Admin Pending"] } 
+    });
+    const inProgressCasesCount = await Customer.countDocuments({ 
+      assignedTo: officerId, 
+      status: "In Progress" 
+    });
+    const cibleCasesCount = await Customer.countDocuments({ 
+      assignedTo: officerId, 
+      status: "Cible" 
+    });
+    const cibilCasesCount = await Customer.countDocuments({ 
+      assignedTo: officerId, 
+      caseType: "cibil" 
+    });
+
+    // Revenue calculations for this officer's cases
+    const revenueAgg = await Offer.aggregate([
+      {
+        $lookup: {
+          from: "customers",
+          localField: "customerId",
+          foreignField: "_id",
+          as: "customer"
+        }
+      },
+      {
+        $unwind: "$customer"
+      },
+      {
+        $match: {
+          "customer.assignedTo": new mongoose.Types.ObjectId(officerId)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$dealAmount" },
+          totalAdvance: { $sum: "$advancePaid" },
+          totalPending: { $sum: "$pendingAmount" }
+        }
+      }
     ]);
-    const pendingAmount = pendingAmountAgg[0]?.total || 0;
- const today = new Date();
+
+    const revenueData = revenueAgg[0] || { totalRevenue: 0, totalAdvance: 0, totalPending: 0 };
+
+    // Today's attendance check
+    const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const todayAttendance = await AttendenceLog.find({
       userId: officerId,
-      createdAt: { $gte: today, $lt: tomorrow },
+      createdAt: { $gte: today, $lt: tomorrow }
     }).sort({ createdAt: -1 });
-    // Prepare stats for frontend
+
+    const isClockedIn = todayAttendance.length > 0 && !todayAttendance[0].logoutTime;
+
+    // Calculate performance metrics
+    const successRate = assignedCasesCount > 0 ? 
+      Math.round((solvedCasesCount / assignedCasesCount) * 100) : 0;
+
+    const pendingResolutionCount = pendingCasesCount + inProgressCasesCount;
+
+    // Prepare comprehensive stats for frontend
     const stats = [
-      { icon: "fa-briefcase", label: "Assigned Cases", value: assignedCasesCount },
-      { icon: "fa-check-circle", label: "Solved Cases", value: solvedCasesCount },
-      { icon: "fa-money-bill-wave", label: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}` },
-      { icon: "fa-money-bill-wave", label: "Pending Amount", value: `₹${pendingAmount.toLocaleString()}` },
-      { icon: "fa-clock", label: "Pending Cases", value: pendingCasesCount },
+   
+      { 
+        icon: "fa-money-bill-wave", 
+        label: "Total Revenue", 
+        value: `₹${revenueData.totalRevenue.toLocaleString()}` 
+      },
+      { 
+        icon: "fa-money-bill", 
+        label: "Advance Received", 
+        value: `₹${revenueData.totalAdvance.toLocaleString()}` 
+      },
+      { 
+        icon: "fa-clock", 
+        label: "Pending Amount", 
+        value: `₹${revenueData.totalPending.toLocaleString()}` 
+      },
+      { 
+        icon: "fa-chart-pie", 
+        label: "Success Rate", 
+        value: `${successRate}%` 
+      }
     ];
 
-    // Fetch recent assigned cases (latest 5)
-    const recentCases = await Case.find({ officer: officerId })
+    // Fetch recent assigned cases with detailed information
+    const recentCases = await Customer.find({ assignedTo: officerId })
       .sort({ createdAt: -1 })
-      .limit(5)
-      .populate("customer", "name");
+      .limit(10)
+      .select('caseId name phone email problem status caseType priority assignedDate createdAt bankDetails')
+      .lean();
 
-    // Format recent cases for frontend
-    const formattedCases = recentCases.map((c) => ({
-      caseId: c.caseId || "N/A",
-      customer: c.customer ? c.customer.name : "Unknown",
-      problem: c.problem || "N/A",
-      assignedDate: c.createdAt.toLocaleDateString(),
-      status: c.status || "Pending",
-      daysCount: Math.floor((new Date() - new Date(c.createdAt)) / (1000 * 60 * 60 * 24)),
-    }));
+    // Format recent cases for frontend with enhanced details
+    const formattedCases = recentCases.map((c) => {
+      const assignedDate = c.assignedDate || c.createdAt;
+      const daysCount = Math.floor((new Date() - new Date(assignedDate)) / (1000 * 60 * 60 * 24));
+      
+      // Extract bank information
+      const bankDetails = c.bankDetails || {};
+      const bankNames = Object.keys(bankDetails).slice(0, 2); // Show first 2 banks
+      
+      return {
+        _id: c._id,
+        caseId: c.caseId || `CASE-${c._id.toString().slice(-6).toUpperCase()}`,
+        name: c.name || "Unknown Customer",
+        phone: c.phone || "N/A",
+        email: c.email || "N/A",
+        problem: c.problem || "No description available",
+        status: c.status || "Pending",
+        caseType: c.caseType || "normal",
+        priority: c.priority || "medium",
+        assignedDate: new Date(assignedDate).toLocaleDateString(),
+        daysCount: daysCount,
+        banks: bankNames,
+        totalBanks: Object.keys(bankDetails).length
+      };
+    });
 
-    res.json({ stats, recentCases: formattedCases });
+    // Case overview summary
+    const caseOverview = {
+      total: assignedCasesCount,
+      solved: solvedCasesCount,
+      pending: pendingCasesCount,
+      inProgress: inProgressCasesCount,
+      cible: cibleCasesCount,
+      cibil: cibilCasesCount,
+      successRate: successRate,
+      pendingResolution: pendingResolutionCount
+    };
+
+    // Attendance status
+    const attendanceStatus = {
+      clockedIn: isClockedIn,
+      lastPunch: todayAttendance.length > 0 ? todayAttendance[0].createdAt : null,
+      todayLogs: todayAttendance
+    };
+
+    res.json({ 
+      success: true,
+      stats, 
+      recentCases: formattedCases,
+      caseOverview,
+      attendanceStatus,
+      lastUpdated: new Date().toISOString()
+    });
+
   } catch (error) {
     console.error("Officer dashboard error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to fetch dashboard data",
+      message: error.message 
+    });
   }
 });
 
@@ -1775,12 +1919,9 @@ app.post('/api/customers/:id/assign', async (req, res) => {
 // ----------------- COMPLETE CASE -----------------
 app.post('/api/customers/:id/complete', async (req, res) => {
   try {
-    const { cibilBefore, cibilAfter } = req.body;
+    // Scores are now optional/deprecated in the request body
+    // const { cibilBefore, cibilAfter } = req.body; 
     const customerId = req.params.id;
-
-    if (!cibilBefore || !cibilAfter) {
-      return res.status(400).json({ error: 'Both CIBIL scores are required' });
-    }
 
     if (!mongoose.Types.ObjectId.isValid(customerId)) {
       return res.status(400).json({ error: 'Invalid customer ID' });
@@ -1795,16 +1936,31 @@ app.post('/api/customers/:id/complete', async (req, res) => {
       return res.status(400).json({ error: 'Case is already solved' });
     }
 
-    // Update customer as solved
-    const noteContent = `Case marked as completed. CIBIL Before: ${cibilBefore}, CIBIL After: ${cibilAfter}`;
+    // --- NEW LOGIC: Enforce CIBIL Report Upload before final Solve ---
+    // Assuming the CIBIL Report is stored under customer.documents.cibilReport
+    if (!customer.documents || !customer.documents.cibilReport) {
+        return res.status(400).json({ 
+            error: 'Final CIBIL Report is required to mark the case as Solved.',
+            // Optionally guide the user on what's missing
+            missingDocument: 'cibilReport'
+        });
+    }
+    // --- END NEW LOGIC ---
 
+    // Create a generic completion note
+    const noteContent = `Case officially marked as Solved. Final CIBIL Report uploaded.`;
+
+    // Update customer as solved. We keep cibilBefore/cibilAfter fields 
+    // but only if they were somehow set previously, or if you decide 
+    // to update them using data extracted from the cibilReport later.
+    // For now, we only update the status and notes.
     const updatedCustomer = await Customer.findByIdAndUpdate(
       customerId,
       {
         status: 'Solved',
-        cibilBefore,
-        cibilAfter,
         resolvedDate: new Date(),
+        // Note: Remove cibilBefore and cibilAfter from the update object
+        // unless you want to explicitly clear them or set them based on a separate logic.
         $push: { notes: { content: noteContent, addedBy: req.user?.id || null } }
       },
       { new: true, runValidators: true }
