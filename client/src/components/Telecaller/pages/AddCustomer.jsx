@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
+
 const AddCustomer = ({
   isOpen,
   onClose,
@@ -14,7 +16,7 @@ const AddCustomer = ({
     "Kotak Mahindra Bank",
     "Bank of Baroda",
     "Canara Bank",
-    "Other" // Keep 'Other' in the main list
+    "Other"
   ];
 
   const issuesOptions = [
@@ -30,7 +32,7 @@ const AddCustomer = ({
     "Other"
   ];
 
-  // State declarations remain the same
+  // --- STATE DECLARATION ---
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -40,13 +42,15 @@ const AddCustomer = ({
     cibil: "",
     address: "",
     problem: "",
-    banks: [], // array of selected bank names (including "Other")
-    otherBanks: [], // array of dynamically added *other* bank names (e.g., ["Bandhan Bank", "Federal Bank"])
-    bankDetails: {}, // details keyed by bank name (standard or other bank)
+    banks: [],
+    otherBanks: [],
+    bankDetails: {},
     pageNumber: "",
     referredPerson: "",
     telecallerId: "",
-    telecallerName: ""
+    telecallerName: "",
+    // 👇 NEW: Lead ID from prefill for conversion tracking
+    leadId: "", 
   });
 
   const [customFields, setCustomFields] = useState([]);
@@ -54,13 +58,13 @@ const AddCustomer = ({
     aadhaarDoc: null,
     panDoc: null,
     accountStatementDoc: null,
-    additionalDoc: null // Included in state
+    additionalDoc: null
   });
   const [errors, setErrors] = useState({});
   const [showIssuesDropdown, setShowIssuesDropdown] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Prefill logic (unchanged)
+  // --- USE EFFECT FOR PREFILL & TELECALLER DATA ---
   useEffect(() => {
     const userData = localStorage.getItem("userData");
     let telecallerId = "";
@@ -95,155 +99,145 @@ const AddCustomer = ({
       ...prefill,
       banks,
       otherBanks,
-      bankDetails
+      bankDetails,
+      // 👇 NEW: Capture leadId from prefill
+      leadId: prefill.leadId || "", 
     }));
 
     setCustomFields(prefill.customFields || []);
   }, [prefill]);
 
-  // Handler for all standard inputs and bank selection checkboxes (Unchanged)
-// Handler for all standard inputs and bank selection checkboxes
-const handleChange = e => {
+  // --- HANDLERS (UNCHANGED) ---
+  const handleChange = e => {
     const { name, value, type, checked, dataset } = e.target;
 
     if (type === "checkbox" && name === "banks") {
-        const selectedBanks = checked
-            ? [...formData.banks, value]
-            : formData.banks.filter(b => b !== value);
+      const selectedBanks = checked
+        ? [...formData.banks, value]
+        : formData.banks.filter(b => b !== value);
 
-        let updatedBankDetails = { ...formData.bankDetails };
-        let updatedOtherBanks = [...formData.otherBanks];
-        
-        if (checked) {
-            // 👇 MODIFICATION HERE: ONLY add bank details if the value is NOT "Other"
-            if (value !== "Other") {
-                updatedBankDetails[value] = updatedBankDetails[value] || { accountNumber: "", loanType: "", issues: [] };
-            }
-        } else {
-            // When unchecking, remove bank details
-            delete updatedBankDetails[value];
-            
-            // If "Other" is unchecked, clear all dynamically added other banks and their details
-            if (value === "Other") {
-                updatedOtherBanks.forEach(otherBankName => {
-                    delete updatedBankDetails[otherBankName];
-                });
-                updatedOtherBanks = [];
-            }
+      let updatedBankDetails = { ...formData.bankDetails };
+      let updatedOtherBanks = [...formData.otherBanks];
+
+      if (checked) {
+        if (value !== "Other") {
+          updatedBankDetails[value] = updatedBankDetails[value] || { accountNumber: "", loanType: "", issues: [] };
         }
+      } else {
+        delete updatedBankDetails[value];
 
-        setFormData(prev => ({
-            ...prev,
-            banks: selectedBanks,
-            otherBanks: updatedOtherBanks, 
-            bankDetails: updatedBankDetails
-        }));
+        if (value === "Other") {
+          updatedOtherBanks.forEach(otherBankName => {
+            delete updatedBankDetails[otherBankName];
+          });
+          updatedOtherBanks = [];
+        }
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        banks: selectedBanks,
+        otherBanks: updatedOtherBanks,
+        bankDetails: updatedBankDetails
+      }));
     }
-    // ... (rest of the handleChange function for otherBank_, accountNumber_, etc., remains unchanged)
     else if (name.startsWith("otherBank_")) {
-        const idx = Number(dataset.index);
-        const prevBankName = formData.otherBanks[idx];
-        const otherBanksCopy = [...formData.otherBanks];
-        otherBanksCopy[idx] = value; // Update the bank name in the otherBanks array
+      const idx = Number(dataset.index);
+      const prevBankName = formData.otherBanks[idx];
+      const otherBanksCopy = [...formData.otherBanks];
+      otherBanksCopy[idx] = value;
 
-        let bankDetailsCopy = { ...formData.bankDetails };
-        
-        // Transfer details from old name to new name in bankDetails
-        if (prevBankName !== value) {
-            const detailsToKeep = bankDetailsCopy[prevBankName] || { accountNumber: "", loanType: "", issues: [] };
-            delete bankDetailsCopy[prevBankName];
-            bankDetailsCopy[value] = detailsToKeep;
-        }
-        // If the name is empty, ensure we have a blank detail object
-        if (value === "") {
-            bankDetailsCopy[value] = bankDetailsCopy[value] || { accountNumber: "", loanType: "", issues: [] };
-        }
+      let bankDetailsCopy = { ...formData.bankDetails };
 
-        setFormData(prev => ({
-            ...prev,
-            otherBanks: otherBanksCopy,
-            bankDetails: bankDetailsCopy
-        }));
+      if (prevBankName !== value) {
+        const detailsToKeep = bankDetailsCopy[prevBankName] || { accountNumber: "", loanType: "", issues: [] };
+        delete bankDetailsCopy[prevBankName];
+        bankDetailsCopy[value] = detailsToKeep;
+      }
+      if (value === "") {
+        bankDetailsCopy[value] = bankDetailsCopy[value] || { accountNumber: "", loanType: "", issues: [] };
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        otherBanks: otherBanksCopy,
+        bankDetails: bankDetailsCopy
+      }));
     }
     else if (name.startsWith("accountNumber_")) {
-        const bank = dataset.bank;
-        setFormData(prev => ({
-            ...prev,
-            bankDetails: {
-                ...prev.bankDetails,
-                [bank]: {
-                    ...prev.bankDetails[bank],
-                    accountNumber: value
-                }
-            }
-        }));
+      const bank = dataset.bank;
+      setFormData(prev => ({
+        ...prev,
+        bankDetails: {
+          ...prev.bankDetails,
+          [bank]: {
+            ...prev.bankDetails[bank],
+            accountNumber: value
+          }
+        }
+      }));
     }
     else if (name.startsWith("loanType_")) {
-        const bank = dataset.bank;
-        setFormData(prev => ({
-            ...prev,
-            bankDetails: {
-                ...prev.bankDetails,
-                [bank]: {
-                    ...prev.bankDetails[bank],
-                    loanType: value
-                }
-            }
-        }));
+      const bank = dataset.bank;
+      setFormData(prev => ({
+        ...prev,
+        bankDetails: {
+          ...prev.bankDetails,
+          [bank]: {
+            ...prev.bankDetails[bank],
+            loanType: value
+          }
+        }
+      }));
     }
     else if (type === "checkbox" && name.startsWith("issues_")) {
-        const bank = dataset.bank;
-        const issue = value;
-        const issues = formData.bankDetails[bank]?.issues || [];
-        const updatedIssues = checked
-            ? [...issues, issue]
-            : issues.filter(i => i !== issue);
+      const bank = dataset.bank;
+      const issue = value;
+      const issues = formData.bankDetails[bank]?.issues || [];
+      const updatedIssues = checked
+        ? [...issues, issue]
+        : issues.filter(i => i !== issue);
 
-        setFormData(prev => ({
-            ...prev,
-            bankDetails: {
-                ...prev.bankDetails,
-                [bank]: {
-                    ...prev.bankDetails[bank],
-                    issues: updatedIssues
-                }
-            }
-        }));
+      setFormData(prev => ({
+        ...prev,
+        bankDetails: {
+          ...prev.bankDetails,
+          [bank]: {
+            ...prev.bankDetails[bank],
+            issues: updatedIssues
+          }
+        }
+      }));
     }
     else {
-        setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
-};
+  };
 
-// ... (Rest of the component code, including addOtherBank, removeOtherBank, etc., remains the same)
-  
-  // Handler for adding a new 'Other' bank input field (Unchanged)
   const addOtherBank = () => {
-    // Generate a temporary unique key for the new bank until the user enters a real name
-    const tempBankName = `__temp_other_bank_${Date.now()}__`; 
+    const tempBankName = `__temp_other_bank_${Date.now()}__`;
     
     setFormData(prev => ({
       ...prev,
       otherBanks: [...prev.otherBanks, tempBankName],
       bankDetails: {
-          ...prev.bankDetails,
-          [tempBankName]: { accountNumber: "", loanType: "", issues: [] }
+        ...prev.bankDetails,
+        [tempBankName]: { accountNumber: "", loanType: "", issues: [] }
       }
     }));
   };
 
-  // Handler for removing a dynamically added 'Other' bank (Unchanged)
   const removeOtherBank = (bankName) => {
     setFormData(prev => {
-        const updatedOtherBanks = prev.otherBanks.filter(b => b !== bankName);
-        const updatedBankDetails = { ...prev.bankDetails };
-        delete updatedBankDetails[bankName]; // Remove details for this bank
-        
-        return {
-            ...prev,
-            otherBanks: updatedOtherBanks,
-            bankDetails: updatedBankDetails
-        };
+      const updatedOtherBanks = prev.otherBanks.filter(b => b !== bankName);
+      const updatedBankDetails = { ...prev.bankDetails };
+      delete updatedBankDetails[bankName];
+      
+      return {
+        ...prev,
+        otherBanks: updatedOtherBanks,
+        bankDetails: updatedBankDetails
+      };
     });
   };
 
@@ -299,24 +293,19 @@ const handleChange = e => {
 
     const allBanks = formData.banks.filter(b => b !== "Other").concat(formData.otherBanks);
     
-    // Check if "Other" is selected but no specific 'other banks' were added
     if(formData.banks.includes("Other") && formData.otherBanks.length === 0) {
-        newErrors.banks = "Please specify at least one 'Other Bank' name or uncheck 'Other'";
+      newErrors.banks = "Please specify at least one 'Other Bank' name or uncheck 'Other'";
     }
-
 
     allBanks.forEach((bank, idx) => {
       const details = formData.bankDetails[bank] || {};
       
-      // Only validate required fields for dynamically added banks
       if (formData.otherBanks.includes(bank)) {
-          // Check for empty "Other" bank name
-          if (!bank || bank.startsWith("__temp_other_bank_")) {
-              newErrors[`otherBank_name_${idx}`] = "Specify a valid bank name";
-          }
+        if (!bank || bank.startsWith("__temp_other_bank_")) {
+          newErrors[`otherBank_name_${idx}`] = "Specify a valid bank name";
+        }
       }
 
-      // Check bank details common to ALL selected/added banks
       if (!details.accountNumber || !/^\d{9,18}$/.test(details.accountNumber)) {
         newErrors[`accountNumber_${bank}`] = `Valid account number (9-18 digits) required for ${bank}`;
       }
@@ -366,19 +355,22 @@ const handleChange = e => {
       pageNumber: "",
       referredPerson: "",
       telecallerId,
-      telecallerName
+      telecallerName,
+      // 👇 NEW: Clear leadId on reset
+      leadId: "", 
     });
     setCustomFields([]);
     setFiles({
       aadhaarDoc: null,
       panDoc: null,
       accountStatementDoc: null,
-      additionalDoc: null // Reset additionalDoc
+      additionalDoc: null
     });
     setErrors({});
     setShowIssuesDropdown({});
   };
 
+  // --- SUBMIT FUNCTION (MODIFIED) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -398,6 +390,11 @@ const handleChange = e => {
           formPayload.append(key, value);
         });
 
+      // 👇 NEW: Append leadId to the customer creation payload if it exists
+      if (formData.leadId) {
+        formPayload.append("convertedFromLeadId", formData.leadId);
+      }
+      
       // Append bank arrays and JSON objects
       formData.banks.filter(b => b !== "Other").forEach(bank => formPayload.append("banks", bank));
       formData.otherBanks.forEach(otherBank => formPayload.append("otherBanks", otherBank));
@@ -416,9 +413,10 @@ const handleChange = e => {
       if (files.aadhaarDoc) formPayload.append("aadhaarDoc", files.aadhaarDoc);
       if (files.panDoc) formPayload.append("panDoc", files.panDoc);
       if (files.accountStatementDoc) formPayload.append("accountStatementDoc", files.accountStatementDoc);
-      if (files.additionalDoc) formPayload.append("additionalDoc", files.additionalDoc); // Append the missing file
+      if (files.additionalDoc) formPayload.append("additionalDoc", files.additionalDoc);
 
-      const response = await fetch("http://localhost:5000/api/customers", {
+      // 1. CREATE CUSTOMER
+      const response = await fetch(`${API_BASE_URL}/customers`, {
         method: "POST",
         body: formPayload,
       });
@@ -426,6 +424,24 @@ const handleChange = e => {
       const result = await response.json();
 
       if (response.ok) {
+        // 2. CONVERT LEAD STATUS (If a leadId was present)
+        if (formData.leadId) {
+            try {
+                const leadUpdateResponse = await fetch(`${API_BASE_URL}/followups/${formData.leadId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    // Set the status to a final, non-followup state like 'Converted' or 'Archived'
+                    body: JSON.stringify({ status: "Converted" }), 
+                });
+
+                if (!leadUpdateResponse.ok) {
+                    console.warn(`Failed to update lead status for ID: ${formData.leadId}. The customer was still created.`);
+                }
+            } catch (leadError) {
+                console.error("Error updating lead status:", leadError);
+            }
+        }
+        
         notify?.("Customer added successfully! 🎉", "success");
         resetForm();
         onClose?.();
@@ -443,20 +459,29 @@ const handleChange = e => {
 
   if (!isOpen) return null;
   
-  // Combine all banks for iteration in the details section
   const allSelectedBanks = formData.banks
     .filter(bank => bank !== "Other")
     .concat(formData.otherBanks)
-    .filter(Boolean); // Filter out any temporary or empty names
+    .filter(Boolean);
 
+  // --- RENDER (Unchanged except for the new lead status banner) ---
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        {/* Header (Unchanged) */}
+        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-2xl font-bold">Add New Customer</h2>
+              <h2 className="text-2xl font-bold">
+                {formData.leadId ? "Convert Lead to Customer" : "Add New Customer"}
+              </h2>
+              {/* 👇 NEW: Conversion Banner */}
+              {formData.leadId && (
+                <div className="text-yellow-200 text-sm mt-1 bg-yellow-600 px-2 py-0.5 rounded inline-block">
+                  Converting Lead ID: {formData.leadId}
+                </div>
+              )}
+              {/* Telecaller Info */}
               {formData.telecallerName && (
                 <div className="text-blue-100 text-sm mt-1">
                   Logged in as: {formData.telecallerName} (ID: {formData.telecallerId})
@@ -478,7 +503,7 @@ const handleChange = e => {
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
           <form onSubmit={handleSubmit} noValidate className="space-y-6">
             
-            {/* ... Personal Information Section (Unchanged) ... */}
+            {/* ... Personal Information Section ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Name */}
               <div>
@@ -749,7 +774,7 @@ const handleChange = e => {
               </div>
             ))}
 
-            {/* ... Custom Fields Section (Unchanged) ... */}
+            {/* ... Custom Fields Section ... */}
             <div className="border border-gray-300 rounded-lg p-4">
               <label className="block text-sm font-medium text-gray-700 mb-3">Custom Fields</label>
               {customFields.map((field, idx) => (
@@ -833,7 +858,7 @@ const handleChange = e => {
             </div>
 
 
-            {/* ... Page Number & Referred By (Unchanged) ... */}
+            {/* ... Page Number & Referred By ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="pageNumber" className="block text-sm font-medium text-gray-700 mb-1">Page Number</label>
@@ -863,7 +888,7 @@ const handleChange = e => {
               </div>
             </div>
 
-            {/* --- File Uploads (Updated) --- */}
+            {/* --- File Uploads --- */}
             <h3 className="text-lg font-semibold text-gray-800 pt-2 border-t border-gray-200">Documents</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Aadhaar */}
@@ -927,7 +952,7 @@ const handleChange = e => {
             {/* --- End File Uploads --- */}
 
 
-            {/* Submit Button (Unchanged) */}
+            {/* Submit Button */}
             <div className="flex justify-end pt-4">
               <button
                 type="button"

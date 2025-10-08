@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import AddCustomer from "./AddCustomer";
-import { FaUserPlus, FaWhatsapp, FaEye, FaEdit, FaPhone, FaTimes, FaSearch, FaSyncAlt, FaFilter } from "react-icons/fa";
 import EditCustomer from "./EditCustomer";
+import { FaUserPlus, FaWhatsapp, FaEye, FaEdit, FaPhone, FaTimes, FaSearch, FaSyncAlt, FaFilter, FaUser, FaMobileAlt, FaInfoCircle, FaCalendar, FaMapMarkerAlt, FaSave, FaUndo, FaUserTie } from "react-icons/fa";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
@@ -40,7 +40,7 @@ const Modal = ({ isOpen, onClose, title, children, size = "md" }) => {
 };
 
 // Reusable Input Components
-const InputField = ({ label, name, value, onChange, type = "text", placeholder, required = false, min }) => (
+const InputField = ({ label, name, value, onChange, type = "text", placeholder, required = false, min, disabled = false }) => (
   <div className="mb-4">
     <label className="block text-sm font-semibold text-gray-700 mb-2">{label}</label>
     <input
@@ -51,12 +51,15 @@ const InputField = ({ label, name, value, onChange, type = "text", placeholder, 
       placeholder={placeholder}
       required={required}
       min={min}
-      className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-sm sm:text-base"
+      disabled={disabled}
+      className={`w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-sm sm:text-base ${
+        disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+      }`}
     />
   </div>
 );
 
-const TextAreaField = ({ label, name, value, onChange, placeholder, required = false, rows = 3 }) => (
+const TextAreaField = ({ label, name, value, onChange, placeholder, required = false, rows = 3, disabled = false }) => (
   <div className="mb-4">
     <label className="block text-sm font-semibold text-gray-700 mb-2">{label}</label>
     <textarea
@@ -66,25 +69,41 @@ const TextAreaField = ({ label, name, value, onChange, placeholder, required = f
       placeholder={placeholder}
       required={required}
       rows={rows}
-      className="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white resize-vertical text-sm sm:text-base"
+      disabled={disabled}
+      className={`w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white resize-vertical text-sm sm:text-base ${
+        disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+      }`}
     />
   </div>
 );
 
-// Helper to check if a date is today (for Today's Follow-ups logic)
+// Detail Item Component for View Modal
+const DetailItem = ({ icon, label, value, className = "" }) => (
+  <div className={`flex items-start space-x-3 p-3 bg-gray-50 rounded-lg ${className}`}>
+    <div className="flex-shrink-0 w-5 h-5 text-gray-500 mt-0.5">
+      {icon}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-semibold text-gray-700 mb-1">{label}</p>
+      <p className="text-sm text-gray-900 break-words">{value || "-"}</p>
+    </div>
+  </div>
+);
+
+// Helper to check if a date is today
 const isToday = (dateString) => {
     if (!dateString) return false;
     try {
-        const date = new Date(dateString);
-        const today = new Date();
-        return (
-            date.getDate() === today.getDate() &&
-            date.getMonth() === today.getMonth() &&
-            date.getFullYear() === today.getFullYear()
-        );
+      const date = new Date(dateString);
+      const today = new Date();
+      return (
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear()
+      );
     } catch (e) {
-        console.error("Invalid date string for isToday:", dateString);
-        return false;
+      console.error("Invalid date string for isToday:", dateString);
+      return false;
     }
 };
 
@@ -94,7 +113,6 @@ const Followups = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
-  // 💡 NEW: State for the main category filter
   const [filterCategory, setFilterCategory] = useState("All Leads"); 
   const [callingCustomer, setCallingCustomer] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -120,8 +138,12 @@ const Followups = () => {
   // Customer modal states
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerPrefill, setCustomerPrefill] = useState(null);
-  const [viewingCustomer, setViewingCustomer] = useState(null);
+  const [viewingLead, setViewingLead] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
+  
+  // States for customer data fetch/viewing
+  const [viewingCustomerData, setViewingCustomerData] = useState(null); 
+  const [isCustomerDataLoading, setIsCustomerDataLoading] = useState(false); 
 
   // Status colors for badges
   const statusColors = {
@@ -129,17 +151,18 @@ const Followups = () => {
     Pending: "bg-yellow-100 text-yellow-800 border border-yellow-300",
     Rejected: "bg-red-100 text-red-800 border border-red-300",
     "Call Back": "bg-blue-100 text-blue-800 border border-blue-300",
+    "Converted": "bg-purple-100 text-purple-800 border border-purple-300",
+    "Not Connected": "bg-gray-100 text-gray-800 border border-gray-300",
+    "Not Responded": "bg-red-50 text-red-700 border border-red-200",
+    "Assigned": "bg-indigo-100 text-indigo-800 border border-indigo-300", 
   };
 
-  // Fetch followups with search term
+  // Fetch followups
   useEffect(() => {
     const fetchFollowups = async () => {
       try {
         setLoading(true);
-        // If you are using query parameters for filtering on the backend, you'd add them here.
-        const response = await fetch(
-          `${API_BASE_URL}/followups?search=${searchTerm}`
-        );
+        const response = await fetch(`${API_BASE_URL}/followups`);
         if (!response.ok) throw new Error("Failed to fetch followups");
         const data = await response.json();
         setFollowups(data);
@@ -151,7 +174,7 @@ const Followups = () => {
       }
     };
     fetchFollowups();
-  }, [searchTerm]);
+  }, [notification]);
 
   const notify = (msg, type = "success") => {
     setNotification({ msg, type });
@@ -161,6 +184,7 @@ const Followups = () => {
   const handleMessage = (phone) =>
     window.open(`https://wa.me/${phone.replace(/\D/g, "")}`, "_blank");
 
+  // Filtering logic
   const filteredFollowups = followups.filter((f) => {
     const matchesSearch = 
       f.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -170,18 +194,12 @@ const Followups = () => {
     
     const matchesStatus = filterStatus === "All" || f.status === filterStatus;
     
-    // 💡 NEW: Category Filtering Logic
     let matchesCategory = true;
     switch (filterCategory) {
       case "Today's Follow-ups":
-        // Check for leads that are 'Pending' or 'Call Back' and were logged today 
-        // OR leads with a 'Call Back' time scheduled for today.
-        // Assumes 'createdAt' is available or 'time' is a full timestamp.
-        const leadDate = f.createdAt || new Date().toISOString(); // Use current date as fallback for 'time' in the row
-        const loggedToday = isToday(leadDate); 
+        const loggedToday = f.createdAt ? isToday(f.createdAt) : false; 
         const scheduledCallbackToday = f.callbackTime ? isToday(f.callbackTime) : false;
-
-        matchesCategory = (loggedToday && (f.status === "Pending" || f.status === "Call Back")) || scheduledCallbackToday;
+        matchesCategory = ((loggedToday && (f.status === "Pending" || f.status === "Call Back")) || scheduledCallbackToday) && f.status !== "Rejected" && f.status !== "Converted";
         break;
       case "Call Back":
         matchesCategory = f.status === "Call Back";
@@ -203,7 +221,6 @@ const Followups = () => {
     setCallingCustomer(customer);
     setCallInProgress(true);
     notify(`Calling ${customer.name} at ${customer.phone}...`);
-    // Simulate call duration delay to show call feedback modal
     setTimeout(() => {
       setCallInProgress(false);
       notify("Call completed. Please provide feedback.", "success");
@@ -241,31 +258,25 @@ const Followups = () => {
 
     try {
       // 1. Update the Followup (Lead)
+      const updatedFollowup = {
+          response: responseText,
+          status: callStatus,
+          callbackTime: callStatus === "Call Back" ? callbackTime : "",
+      };
+      
       const updateResponse = await fetch(
         `${API_BASE_URL}/followups/${callingCustomer._id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            response: responseText,
-            status: callStatus,
-            callbackTime: callStatus === "Call Back" ? callbackTime : "",
-          }),
+          body: JSON.stringify(updatedFollowup),
         }
       );
       if (!updateResponse.ok) throw new Error("Failed to update followup");
 
       setFollowups((prev) =>
         prev.map((f) =>
-          f._id === callingCustomer._id
-            ? {
-                ...f,
-                response: responseText,
-                // Note: 'time' here is likely the initial lead time. We keep it or update it if needed.
-                status: callStatus,
-                callbackTime: callStatus === "Call Back" ? callbackTime : "",
-              }
-            : f
+          f._id === callingCustomer._id ? { ...f, ...updatedFollowup } : f
         )
       );
 
@@ -288,7 +299,7 @@ const Followups = () => {
           callbackTime: callStatus === "Call Back" ? callbackTime : "",
         }),
       });
-      if (!callLogResponse.ok) throw new Error("Failed to save call log");
+      if (!callLogResponse.ok) console.error("Failed to save call log silently");
 
       // Open AddCustomer modal if status is Success
       if (callStatus === "Success") {
@@ -320,7 +331,7 @@ const Followups = () => {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        createdAt: new Date().toISOString(), // 💡 Add createdAt for filtering
+        createdAt: new Date().toISOString(),
         response: "",
       };
       const response = await fetch(`${API_BASE_URL}/followups`, {
@@ -348,6 +359,11 @@ const Followups = () => {
 
   // Handle edit lead details
   const handleEditLead = (followup) => {
+    // Prevent editing if assigned
+    if (followup.assignedToName) {
+        notify(`Cannot edit: Lead is already assigned to ${followup.assignedToName}.`, 'error');
+        return;
+    }
     setEditingLead({ ...followup });
   };
 
@@ -377,23 +393,105 @@ const Followups = () => {
     }
   };
 
-  // Handle view customer details
-  const handleViewCustomer = (followup) => {
-    setViewingCustomer(followup);
+  // handleViewLead now checks for customer conversion
+  const handleViewLead = async (followup) => {
+    setViewingLead(followup);
+    setViewingCustomerData(null);
+    setIsCustomerDataLoading(false);
+
+    // Check if the lead is a candidate for conversion display
+    if (followup.status === "Success" || followup.status === "Converted") {
+      try {
+        setIsCustomerDataLoading(true);
+        const res = await fetch(`${API_BASE_URL}/customers/byLead/${followup._id}`); 
+        
+        if (res.ok) {
+          const customerData = await res.json();
+          setViewingCustomerData(customerData);
+          notify(`Linked Customer details found! Case ID: ${customerData.caseId}`, 'success');
+        } else {
+          notify('Lead marked successful, but could not retrieve linked customer data.', 'error');
+        }
+      } catch (error) {
+        console.error("Fetch customer error:", error);
+        notify('Error retrieving linked customer data.', 'error');
+      } finally {
+        setIsCustomerDataLoading(false);
+      }
+    }
   };
 
-  // Convert lead to customer
-  const handleConvertToCustomer = (followup) => {
-    setShowCustomerModal(true);
-    setCustomerPrefill({
-      name: followup.name,
-      phone: followup.phone,
-      issueType: followup.issueType || "",
-      village: followup.village || "",
-      leadId: followup._id,
-      isEditing: false,
-    });
-    notify(`Preparing to convert ${followup.name} to a Customer.`);
+  /**
+   * Handles the click of the Edit button within the View Modal.
+   * Redirects flow to Edit Lead or Edit Customer based on data availability.
+   */
+  const handleEditFromView = () => {
+    // 1. Check for assignment status before proceeding to edit lead
+    if (viewingLead && !viewingCustomerData && viewingLead.assignedToName) {
+        notify(`Cannot edit: Lead is already assigned to ${viewingLead.assignedToName}.`, 'error');
+        setViewingLead(null);
+        return;
+    }
+      
+    // 2. Proceed with edit flow
+    if (viewingCustomerData) {
+        // Case 1: Editing Customer
+        setViewingLead(null);
+        
+        setCustomerPrefill({
+            ...viewingCustomerData,
+            leadId: viewingLead._id, 
+            isEditing: true,
+        });
+        setShowCustomerModal(true);
+        notify(`Opening Edit Customer Mode for Case ${viewingCustomerData.caseId}.`, 'info');
+
+    } else if (viewingLead) {
+        // Case 2: Editing Lead (passed assignment check)
+        setViewingLead(null);
+        handleEditLead(viewingLead);
+        notify(`Opening Edit Lead Mode for ${viewingLead.name}.`, 'info');
+    }
+  };
+
+  // Check for existing customer record before opening the Add/Edit modal
+  const handleConvertToCustomer = async (followup) => {
+    
+    // 1. Check if a Customer record already exists for this Lead ID
+    try {
+        setIsCustomerDataLoading(true);
+        const res = await fetch(`${API_BASE_URL}/customers/byLead/${followup._id}`); 
+        
+        if (res.ok) {
+            // CUSTOMER EXISTS: Open Edit Modal
+            const existingCustomer = await res.json();
+            
+            setCustomerPrefill({
+                ...existingCustomer,
+                leadId: followup._id,
+                isEditing: true,
+            });
+            setShowCustomerModal(true);
+            notify(`Customer ${existingCustomer.name} already exists. Opening Edit Mode.`, 'info');
+        } else {
+            // CUSTOMER DOES NOT EXIST: Open Add Modal
+            setCustomerPrefill({
+                name: followup.name,
+                phone: followup.phone,
+                issueType: followup.issueType || "",
+                village: followup.village || "",
+                leadId: followup._id,
+                isEditing: false,
+            });
+            setShowCustomerModal(true);
+            notify(`Preparing to convert ${followup.name} to a new Customer.`, 'success');
+        }
+    } catch (error) {
+        console.error("Error checking existing customer:", error);
+        notify("Error checking customer status. Please try again.", "error");
+    } finally {
+        setIsCustomerDataLoading(false);
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -407,6 +505,20 @@ const Followups = () => {
       </span>
     );
   };
+  
+  // Helper for Customer Detail items in the Customer View Modal
+  const CustomerDetailItem = ({ icon, label, value }) => (
+    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex items-start space-x-2">
+      <div className="text-sm pt-0.5 text-blue-500">{icon}</div>
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase">{label}</p>
+        <p className="text-sm font-medium text-gray-800 break-words">{value || "N/A"}</p>
+      </div>
+    </div>
+  );
+
+  // Check if the lead is assigned
+  const isAssigned = (lead) => !!lead.assignedToName;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-4 md:p-6">
@@ -424,13 +536,12 @@ const Followups = () => {
         </div>
       )}
 
-      {/* Header Section */}
+      {/* Header Section and Filters */}
       <div className="mb-6 sm:mb-8">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Lead Follow-ups</h2>
-        <p className="text-gray-600 text-sm sm:text-base">Manage and track all lead follow-ups efficiently</p>
+        <p className="text-gray-600 text-sm sm:text-base">Showing {filteredFollowups.length} leads (Total: {followups.length})</p>
       </div>
 
-      {/* Filters Card */}
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 sm:mb-8">
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 xl:grid-cols-4">
           {/* Search */}
@@ -448,7 +559,7 @@ const Followups = () => {
             </div>
           </div>
 
-          {/* 💡 NEW: Follow-up Category Filter */}
+          {/* Filters */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Follow-up Category</label>
             <div className="relative">
@@ -458,7 +569,7 @@ const Followups = () => {
                 value={filterCategory}
                 onChange={(e) => {
                   setFilterCategory(e.target.value);
-                  setFilterStatus("All"); // Reset status filter for clarity
+                  setFilterStatus("All");
                 }}
               >
                 <option value="All Leads">All Leads</option>
@@ -469,7 +580,6 @@ const Followups = () => {
             </div>
           </div>
 
-          {/* Status Filter (for finer control within a category) */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Status Filter</label>
             <div className="relative">
@@ -480,15 +590,11 @@ const Followups = () => {
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
                 <option value="All">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Success">Success</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Call Back">Call Back</option>
+                {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
 
-          {/* Add Lead Button */}
           <div className="flex items-end">
             <button 
               onClick={() => setAddLeadModal(true)}
@@ -502,118 +608,6 @@ const Followups = () => {
 
       {/* Leads Table Card */}
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        {/* Mobile Cards View */}
-        <div className="block sm:hidden">
-          {loading ? (
-            <div className="p-8 text-center text-gray-500">
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                  <FaSyncAlt className="text-gray-400 text-lg animate-spin" />
-                </div>
-                <p className="text-base font-medium text-gray-600">Loading leads...</p>
-              </div>
-            </div>
-          ) : filteredFollowups.length > 0 ? (
-            <div className="divide-y divide-gray-200">
-              {filteredFollowups.map((f) => (
-                <div key={f._id} className="p-4 hover:bg-gray-50 transition-colors duration-200">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-semibold text-gray-800 text-base">{f.name}</h3>
-                      <p className="text-gray-600 text-sm mt-1">{f.phone}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-1">{f.time}</div>
-                      {getStatusBadge(f.status || "Pending")}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-3">
-                    <div>
-                      <span className="font-medium">Issue:</span> {f.issueType || "-"}
-                    </div>
-                    <div>
-                      <span className="font-medium">Village:</span> {f.village || "-"}
-                    </div>
-                  </div>
-
-                  {f.response && (
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-700 line-clamp-2">
-                        <span className="font-medium">Response:</span> {f.response}
-                      </p>
-                    </div>
-                  )}
-
-                  {f.callbackTime && (
-                    <div className="mb-3">
-                      <p className="text-sm text-blue-600">
-                        <span className="font-medium">Callback:</span> {f.callbackTime}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between pt-3 border-t border-gray-200">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => initiateCall(f)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"
-                        disabled={callInProgress}
-                        title="Call"
-                      >
-                        <FaPhone />
-                      </button>
-                      <button
-                        onClick={() => handleMessage(f.phone)}
-                        className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-all duration-200"
-                        title="WhatsApp"
-                      >
-                        <FaWhatsapp size={16} />
-                      </button>
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleViewCustomer(f)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                        title="View Details"
-                      >
-                        <FaEye size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleEditLead(f)}
-                        className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-all duration-200"
-                        title="Edit Lead"
-                      >
-                        <FaEdit size={16} />
-                      </button>
-                      {f.status === "Success" && (
-                        <button
-                          onClick={() => handleConvertToCustomer(f)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
-                          title="Convert to Customer"
-                        >
-                          <FaUserPlus size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 text-center text-gray-500">
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                  <FaSearch className="text-gray-400 text-lg" />
-                </div>
-                <p className="text-base font-medium text-gray-600">No leads found</p>
-                <p className="text-gray-500 mt-1 text-sm">Try adjusting your search or filters</p>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Desktop Table View */}
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
@@ -632,16 +626,7 @@ const Followups = () => {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading ? (
-                <tr>
-                  <td colSpan={9} className="p-8 text-center text-gray-500">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                        <FaSyncAlt className="text-gray-400 text-xl animate-spin" />
-                      </div>
-                      <p className="text-lg font-medium text-gray-600">Loading leads...</p>
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan={9} className="p-8 text-center text-gray-500">Loading leads...</td></tr>
               ) : filteredFollowups.length > 0 ? (
                 filteredFollowups.map((f) => (
                   <tr
@@ -667,10 +652,7 @@ const Followups = () => {
                           onBlur={() => setEditingStatus(null)}
                           autoFocus
                         >
-                          <option value="Pending">Pending</option>
-                          <option value="Success">Success</option>
-                          <option value="Rejected">Rejected</option>
-                          <option value="Call Back">Call Back</option>
+                          {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       ) : (
                         <div
@@ -691,7 +673,6 @@ const Followups = () => {
                           title="Call"
                         >
                           <FaPhone className="text-sm sm:text-base" />
-                       
                         </button>
                         <button
                           onClick={() => handleMessage(f.phone)}
@@ -699,38 +680,25 @@ const Followups = () => {
                           title="WhatsApp"
                         >
                           <FaWhatsapp size={15} className="sm:size-[17px]" />
-                        
                         </button>
                         
-                        {/* View Details Button - Available for all leads */}
+                        {/* View Details Button */}
                         <button
-                          onClick={() => handleViewCustomer(f)}
+                          onClick={() => handleViewLead(f)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-110 group relative"
-                          title="View Lead Details"
+                          title="View Details"
                         >
                           <FaEye size={16} className="sm:size-[18px]" />
-                       
                         </button>
 
-                        {/* Edit Lead Button - Available for all leads */}
-                        <button
-                          onClick={() => handleEditLead(f)}
-                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-110 group relative"
-                          title="Edit Lead Details"
-                        >
-                          <FaEdit size={16} className="sm:size-[18px]" />
-
-                        </button>
-
-                        {/* Convert to Customer Button - Only for Success status */}
-                        {f.status === "Success" && (
+                        {/* Convert to Customer Button */}
+                        {(f.status === "Success" || f.status === "Pending") && (
                           <button
                             onClick={() => handleConvertToCustomer(f)}
                             className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-110 group relative"
                             title="Convert to Customer"
                           >
                             <FaUserPlus size={16} className="sm:size-[18px]" />
-                           
                           </button>
                         )}
                       </div>
@@ -738,20 +706,58 @@ const Followups = () => {
                   </tr>
                 ))
               ) : (
-                <tr>
-                  <td colSpan={9} className="p-8 text-center text-gray-500">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                        <FaSearch className="text-gray-400 text-xl" />
-                      </div>
-                      <p className="text-lg font-medium text-gray-600">No leads found</p>
-                      <p className="text-gray-500 mt-1">Try adjusting your search or filters</p>
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan={9} className="p-8 text-center text-gray-500">No leads found.</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="sm:hidden">
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">Loading leads...</div>
+          ) : filteredFollowups.length > 0 ? (
+            filteredFollowups.map((f) => (
+              <div key={f._id} className="border-b border-gray-200 p-4 hover:bg-gray-50">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-semibold text-gray-800">{f.name}</h3>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => initiateCall(f)}
+                      className="p-1 text-green-600"
+                      title="Call"
+                    >
+                      <FaPhone size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleMessage(f.phone)}
+                      className="p-1 text-green-500"
+                      title="WhatsApp"
+                    >
+                      <FaWhatsapp size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleViewLead(f)}
+                      className="p-1 text-blue-600"
+                      title="View Details"
+                    >
+                      <FaEye size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p>📞 {f.phone}</p>
+                  <p>📝 {f.issueType || "-"}</p>
+                  <p>🏠 {f.village || "-"}</p>
+                  <p>⏰ {f.time}</p>
+                  <div className="mt-2">{getStatusBadge(f.status || "Pending")}</div>
+                  {f.callbackTime && <p className="text-xs text-blue-600">Callback: {f.callbackTime}</p>}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-8 text-center text-gray-500">No leads found.</div>
+          )}
         </div>
       </div>
 
@@ -848,7 +854,6 @@ const Followups = () => {
             placeholder="Enter lead name"
             required
           />
-
           <InputField
             label="Phone"
             name="phone"
@@ -857,7 +862,6 @@ const Followups = () => {
             placeholder="Enter phone number"
             required
           />
-
           <InputField
             label="Issue Type"
             name="issueType"
@@ -865,7 +869,6 @@ const Followups = () => {
             onChange={(e) => setNewLead(prev => ({ ...prev, issueType: e.target.value }))}
             placeholder="Enter issue type"
           />
-
           <InputField
             label="Village"
             name="village"
@@ -873,7 +876,6 @@ const Followups = () => {
             onChange={(e) => setNewLead(prev => ({ ...prev, village: e.target.value }))}
             placeholder="Enter village"
           />
-
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
             <select
@@ -887,7 +889,6 @@ const Followups = () => {
               <option value="Call Back">Call Back</option>
             </select>
           </div>
-
           <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sm:pt-6 border-t border-gray-200">
             <button
               onClick={() => setAddLeadModal(false)}
@@ -910,44 +911,43 @@ const Followups = () => {
         isOpen={!!editingLead} 
         onClose={() => setEditingLead(null)} 
         title={`Edit Lead: ${editingLead?.name}`}
-        size="md"
+        size="lg"
       >
         {editingLead && (
           <div className="space-y-4 sm:space-y-6">
-            <InputField
-              label="Name"
-              name="name"
-              value={editingLead.name}
-              onChange={(e) => setEditingLead(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Enter lead name"
-              required
-            />
-
-            <InputField
-              label="Phone"
-              name="phone"
-              value={editingLead.phone}
-              onChange={(e) => setEditingLead(prev => ({ ...prev, phone: e.target.value }))}
-              placeholder="Enter phone number"
-              required
-            />
-
-            <InputField
-              label="Issue Type"
-              name="issueType"
-              value={editingLead.issueType}
-              onChange={(e) => setEditingLead(prev => ({ ...prev, issueType: e.target.value }))}
-              placeholder="Enter issue type"
-            />
-
-            <InputField
-              label="Village"
-              name="village"
-              value={editingLead.village}
-              onChange={(e) => setEditingLead(prev => ({ ...prev, village: e.target.value }))}
-              placeholder="Enter village"
-            />
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InputField
+                  label="Name"
+                  name="name"
+                  value={editingLead.name}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter lead name"
+                  required
+                />
+                <InputField
+                  label="Phone"
+                  name="phone"
+                  value={editingLead.phone}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="Enter phone number"
+                  required
+                />
+                <InputField
+                  label="Issue Type"
+                  name="issueType"
+                  value={editingLead.issueType}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, issueType: e.target.value }))}
+                  placeholder="Enter issue type"
+                />
+                <InputField
+                  label="Village"
+                  name="village"
+                  value={editingLead.village}
+                  onChange={(e) => setEditingLead(prev => ({ ...prev, village: e.target.value }))}
+                  placeholder="Enter village"
+                />
+            </div>
+            
             <TextAreaField
               label="Response / Notes"
               name="response"
@@ -957,116 +957,197 @@ const Followups = () => {
               rows={3}
             />
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-              <select
-                value={editingLead.status}
-                onChange={(e) => setEditingLead(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-sm sm:text-base"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Success">Success</option>
-                <option value="Rejected">Rejected</option>
-                <option value="Call Back">Call Back</option>
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <select
+                    value={editingLead.status}
+                    onChange={(e) => setEditingLead(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-white text-sm sm:text-base"
+                  >
+                    {Object.keys(statusColors).filter(s => s !== 'Converted').map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                {editingLead.status === "Call Back" && (
+                    <InputField
+                      label="Callback Date & Time"
+                      name="callbackTime"
+                      type="datetime-local"
+                      value={editingLead.callbackTime || ""}
+                      onChange={(e) => setEditingLead(prev => ({ ...prev, callbackTime: e.target.value }))}
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                )}
             </div>
+            
 
             <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sm:pt-6 border-t border-gray-200">
               <button
                 onClick={() => setEditingLead(null)}
                 className="px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 font-semibold text-sm sm:text-base order-2 sm:order-1"
               >
-                Cancel
+                <FaTimes className="mr-2" /> Cancel
               </button>
               <button
                 onClick={handleSaveEditLead}
                 className="px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-lg sm:rounded-xl hover:from-indigo-600 hover:to-indigo-700 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold text-sm sm:text-base order-1 sm:order-2"
               >
-                Save Changes
+                <FaSave className="mr-2" /> Save Changes
               </button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* View Lead Details Modal */}
+      {/* View Lead/Customer Details Modal */}
       <Modal 
-        isOpen={!!viewingCustomer} 
-        onClose={() => setViewingCustomer(null)} 
-        title="Lead Details"
-        size="lg"
+        isOpen={!!viewingLead} 
+        onClose={() => {
+          setViewingLead(null);
+          setViewingCustomerData(null);
+        }} 
+        title={viewingCustomerData ? `Customer Details (Case: ${viewingCustomerData.caseId})` : "Lead Details"}
+        size="xl"
       >
-        {viewingCustomer && (
-          <div className="space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Name</p>
-                <p className="text-base sm:text-lg font-medium text-gray-800">{viewingCustomer.name}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Phone</p>
-                <p className="text-base sm:text-lg font-medium text-gray-800">{viewingCustomer.phone}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Issue Type</p>
-                <p className="text-base sm:text-lg font-medium text-gray-800">{viewingCustomer.issueType || "Not specified"}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Village</p>
-                <p className="text-base sm:text-lg font-medium text-gray-800">{viewingCustomer.village || "Not specified"}</p>
-              </div>
-
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Status</p>
-                <div className="mt-1">
-                  {getStatusBadge(viewingCustomer.status || "Pending")}
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Time</p>
-                <p className="text-base sm:text-lg font-medium text-gray-800">{viewingCustomer.time}</p>
-              </div>
-
-              {viewingCustomer.callbackTime && (
-                <div className="bg-blue-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-blue-200 sm:col-span-2">
-                  <p className="text-sm font-semibold text-blue-600 mb-1">Callback Time</p>
-                  <p className="text-base sm:text-lg font-medium text-blue-800">{viewingCustomer.callbackTime}</p>
-                </div>
-              )}
-            </div>
-
-            {viewingCustomer.response && (
-              <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-yellow-200">
-                <p className="text-sm font-semibold text-yellow-600 mb-2">Response / Notes</p>
-                <p className="text-gray-800 italic text-sm sm:text-base">{viewingCustomer.response}</p>
+        {viewingLead && (
+          <div className="space-y-6">
+            {/* Loading State for Customer Data */}
+            {isCustomerDataLoading && (
+              <div className="p-4 bg-yellow-100 rounded-xl text-center text-yellow-800 flex items-center justify-center space-x-2">
+                <FaSyncAlt className="animate-spin" />
+                <span>Checking for linked customer record...</span>
               </div>
             )}
 
-            <div className="flex justify-end pt-4 sm:pt-6 border-t border-gray-200">
-              <button
-                onClick={() => setViewingCustomer(null)}
-                className="px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg sm:rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold text-sm sm:text-base"
-              >
-                Close
-              </button>
+            {/* Display Customer Data (if found) */}
+            {viewingCustomerData ? (
+              <div className="space-y-6">
+                <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                    <h4 className="text-xl font-bold text-green-800">Customer Conversion Successful!</h4>
+                    <p className="text-sm text-gray-600 mt-1">Original Lead ID: {viewingCustomerData.convertedFromLeadId}</p>
+                </div>
+
+                <h5 className="text-lg font-semibold text-gray-800 border-b pb-2">Customer Information</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <CustomerDetailItem icon={<FaUser />} label="Full Name" value={viewingCustomerData.name} />
+                  <CustomerDetailItem icon={<FaMobileAlt />} label="Phone" value={viewingCustomerData.phone} />
+                  <CustomerDetailItem icon={<FaTimes />} label="Case Status" value={viewingCustomerData.status} />
+                  <CustomerDetailItem icon={<FaInfoCircle />} label="Problem" value={viewingCustomerData.problem} />
+                  <CustomerDetailItem icon={<FaSearch />} label="CIBIL Score" value={viewingCustomerData.cibilBefore || 'N/A'} />
+                  <CustomerDetailItem icon={<FaCalendar />} label="Created At" value={new Date(viewingCustomerData.createdAt).toLocaleDateString()} />
+                  <CustomerDetailItem icon={<FaUser />} label="Telecaller" value={viewingCustomerData.telecallerName} />
+                  <CustomerDetailItem icon={<FaMapMarkerAlt />} label="Address" value={viewingCustomerData.address} className="md:col-span-2" />
+                </div>
+
+                <h5 className="text-lg font-semibold text-gray-800 border-b pt-4 pb-2">Bank & Loan Details</h5>
+                <div className="space-y-4">
+                  {Object.entries(viewingCustomerData.bankDetails || {}).map(([bankName, details]) => (
+                    <div key={bankName} className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                      <h6 className="font-bold text-blue-800 mb-2">{bankName}</h6>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <p className="col-span-1">A/C Number: <span className="font-mono text-gray-700">{details.accountNumber}</span></p>
+                        <p className="col-span-1">Loan Type: <span className="font-medium text-gray-700">{details.loanType}</span></p>
+                        <p className="col-span-2">Issues: <span className="text-red-600">{details.issues?.join(', ') || 'None reported'}</span></p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            ) : (
+              /* Display Original Lead Data */
+              <div className="space-y-6">
+                <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                    <h4 className="text-xl font-bold text-yellow-800">Lead Details: {viewingLead.name}</h4>
+                    {(viewingLead.status === "Success" || viewingLead.status === "Converted") && 
+                      <p className="text-sm text-red-600 mt-1">Status is '{viewingLead.status}', but linked customer data was not found.</p>
+                    }
+                </div>
+
+                {/* Lead Information Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <DetailItem icon={<FaUser />} label="Name" value={viewingLead.name} />
+                    <DetailItem icon={<FaMobileAlt />} label="Phone" value={viewingLead.phone} />
+                    <DetailItem icon={<FaInfoCircle />} label="Issue Type" value={viewingLead.issueType} />
+                    <DetailItem icon={<FaMapMarkerAlt />} label="Village" value={viewingLead.village} />
+                    <DetailItem icon={<FaCalendar />} label="Status" value={viewingLead.status} />
+                    <DetailItem icon={<FaCalendar />} label="Callback Time" value={viewingLead.callbackTime} />
+
+                    {/* Display Assigned Details if available */}
+                    {viewingLead.assignedToName && (
+                        <div className="sm:col-span-2">
+                           <DetailItem 
+                             icon={<FaUserTie className="text-indigo-500" />} 
+                             label="Assigned To" 
+                             value={viewingLead.assignedToName} 
+                             className="bg-indigo-50 border border-indigo-200"
+                           />
+                        </div>
+                    )}
+                </div>
+
+                {viewingLead.response && (
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
+                    <p className="text-sm font-semibold text-gray-600 mb-2">Last Response / Notes</p>
+                    <p className="text-gray-800 italic text-sm sm:text-base whitespace-pre-wrap">{viewingLead.response}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* View Modal Footer with Edit Button */}
+            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sm:pt-6 border-t border-gray-200">
+                <button
+                    onClick={handleEditFromView}
+                    disabled={viewingLead && !viewingCustomerData && isAssigned(viewingLead)}
+                    className={`px-4 sm:px-6 py-2 sm:py-3 text-white rounded-lg sm:rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold text-sm sm:text-base order-1 sm:order-1 flex items-center justify-center ${
+                      viewingLead && !viewingCustomerData && isAssigned(viewingLead) 
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600'
+                    }`}
+                >
+                    <FaEdit className="mr-2" /> 
+                    {viewingCustomerData ? "Edit Customer" : "Edit Lead"}
+                </button>
+                <button
+                    onClick={() => {
+                        setViewingLead(null);
+                        setViewingCustomerData(null); 
+                    }}
+                    className="px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 font-semibold text-sm sm:text-base order-2 sm:order-2"
+                >
+                    Close View
+                </button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Add Customer Modal (for Convert) */}
-      {showCustomerModal && !customerPrefill?.isEditing && (
+      {/* Add Customer Modal */}
+      {showCustomerModal && customerPrefill && !customerPrefill.isEditing && (
         <AddCustomer
           isOpen={showCustomerModal}
           onClose={() => {
             setShowCustomerModal(false);
             setCustomerPrefill(null);
+            setNotification({ msg: "Customer conversion/update complete, refreshing leads...", type: "success" }); 
           }}
           prefill={customerPrefill}
+          notify={notify}
+        />
+      )}
+      
+      {/* Edit Customer Modal */}
+      {showCustomerModal && customerPrefill && customerPrefill.isEditing && (
+        <EditCustomer
+          isOpen={showCustomerModal}
+          onClose={() => {
+            setShowCustomerModal(false);
+            setCustomerPrefill(null);
+            setNotification({ msg: "Customer conversion/update complete, refreshing leads...", type: "success" }); 
+          }}
+          customerData={customerPrefill}
+          customerId={customerPrefill._id} 
           notify={notify}
         />
       )}

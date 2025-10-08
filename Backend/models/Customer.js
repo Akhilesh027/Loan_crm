@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// --- Sub-Schemas Definitions ---
+// --- Sub-Schemas Definitions (Unchanged) ---
 
 const callHistorySchema = new mongoose.Schema({
     response: {
@@ -49,8 +49,7 @@ const bankDetailsSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true,
-        // Basic validation for account numbers (9-18 digits)
-        match: [/^\d{9,18}$/, 'Account number must be 9-18 digits'] 
+        match: [/^\d{9,18}$/, 'Account number must be 9-18 digits']
     },
     loanType: {
         type: String,
@@ -86,7 +85,7 @@ const bankDetailsSchema = new mongoose.Schema({
         enum: ['Pending', 'In Progress', 'Completed', 'On Hold'],
         default: 'Pending'
     }
-}, { _id: false }); // Disable _id for sub-documents in the Map
+}, { _id: false });
 
 const customFieldSchema = new mongoose.Schema({
     label: {
@@ -99,14 +98,25 @@ const customFieldSchema = new mongoose.Schema({
         enum: ['text', 'number', 'date', 'email', 'textarea', 'file'],
         required: true
     },
-    // This will store the string value (for non-file types) or the filename (for file type)
     value: mongoose.Schema.Types.Mixed 
 }, { _id: false });
 
-// --- Main Customer Schema Definition ---
+// --- Main Customer Schema Definition (Updated) ---
 
 const customerSchema = new mongoose.Schema({
-    // ... (Existing fields - caseId, name, phone, email, etc.) ...
+    /**
+     * 👇 NEW FIELD FOR LEAD CONVERSION TRACKING
+     * Stores the ID of the Followup/Lead document this customer was converted from.
+     * This links the new customer record back to the original sales lead.
+     */
+    convertedFromLeadId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Followup', // Assuming your lead model is named 'Followup'
+        default: null,
+        index: true,
+        sparse: true
+    },
+    // ... (Existing fields) ...
     caseId: {
         type: String,
         unique: true,
@@ -172,21 +182,19 @@ const customerSchema = new mongoose.Schema({
             'Kotak Mahindra Bank',
             'Bank of Baroda',
             'Canara Bank',
-            'Other' // Keep 'Other' for the checkbox presence
+            'Other'
         ]
     }],
 
-    // ✅ RESTORED: This array holds the dynamically added bank names (keys for bankDetails)
     otherBanks: [{
         type: String,
         trim: true
     }],
 
-    // This Map structure handles ALL bank details, using bank names (from `banks` or `otherBanks`) as keys.
     bankDetails: {
         type: Map,
         of: bankDetailsSchema,
-        default: {} // Initialize as an empty object/map
+        default: {}
     },
     customFields: [customFieldSchema],
     pageNumber: {
@@ -212,9 +220,9 @@ const customerSchema = new mongoose.Schema({
         ref: 'User',
         default: null
     },
-      caseType: { 
+    caseType: { 
         type: String, 
-        enum: ['normal', 'cibil'], // Enforce one of these two values
+        enum: ['normal', 'cibil'],
         default: 'normal'
     }, 
     assignedToName: {
@@ -240,12 +248,11 @@ const customerSchema = new mongoose.Schema({
         enum: ['pending', 'completed', 'partial'],
         default: 'pending'
     },
-    // ✅ COMBINED: Consolidating all file fields under the 'documents' object
     documents: {
         aadhaarDoc: { type: String, default: "" },
         panDoc: { type: String, default: "" },
         accountStatementDoc: { type: String, default: "" },
-        additionalDoc: { type: String, default: "" }, // From frontend 'additionalDoc'
+        additionalDoc: { type: String, default: "" },
         paymentProof: { type: String, default: "" },
         cibilReport:{type:String,default: ""},
         agentPaymentProof: { type: String, default: "" }
@@ -254,7 +261,6 @@ const customerSchema = new mongoose.Schema({
     advanceAmount: { type: Number, min: 0 },
     status: {
     type: String,
-    // Add all status values currently used in your system to the enum array
     enum: [
         'new',
         'In Progress',
@@ -263,14 +269,12 @@ const customerSchema = new mongoose.Schema({
         'closed',
         'Solved',
         'Call Back',
-        
-        // These are the values likely missing and causing validation to fail:
-        'Pending',          // Used in many places as a generic initial status
+        'Pending',         
         'Customer Pending',
         'Agent Pending',
         'Admin Pending'
     ],
-    default: 'new' // Keep your default value
+    default: 'new'
 },
     priority: {
         type: String,
@@ -285,11 +289,6 @@ const customerSchema = new mongoose.Schema({
     }],
     callHistory: [callHistorySchema],
     notes: [noteSchema],
-    caseType: {
-        type: String,
-        enum: ['normal', 'cibil'],
-        default: 'normal'
-    },
     assignedAt: Date,
     completedAt: Date
 
@@ -299,8 +298,8 @@ const customerSchema = new mongoose.Schema({
 
 // Generate case ID before saving
 customerSchema.pre("save", async function (next) {
-    // Check if a caseId already exists to avoid overwriting on updates
     if (!this.caseId) {
+        // Use the model to count documents, making sure we don't count unsaved changes
         const count = await mongoose.model("Customer").countDocuments();
         this.caseId = `CASE-${(count + 1).toString().padStart(4, "0")}`;
     }

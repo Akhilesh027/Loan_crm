@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { FaUserPlus, FaWhatsapp, FaEye, FaEdit, FaPhone, FaTimes, FaSearch, FaSyncAlt, FaCalendar, FaMapMarkerAlt, FaInfoCircle, FaSave, FaUser, FaMobileAlt, FaFilter, FaUndo } from "react-icons/fa";
+import { FaUserPlus, FaWhatsapp, FaEye, FaEdit, FaPhone, FaTimes, FaSearch, FaSyncAlt, FaCalendar, FaMapMarkerAlt, FaInfoCircle, FaSave, FaUser, FaMobileAlt, FaFilter, FaUndo, FaUserTie } from "react-icons/fa";
 import AddCustomer from "./AddCustomer";
+import EditCustomer from "./EditCustomer";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
 
@@ -82,6 +83,7 @@ const StatusBadge = ({ status }) => {
     Pending: "bg-yellow-100 text-yellow-800 border border-yellow-300",
     Rejected: "bg-red-100 text-red-800 border border-red-300",
     "Call Back": "bg-blue-100 text-blue-800 border border-blue-300",
+    "Converted": "bg-purple-100 text-purple-800 border border-purple-300",
   };
 
   return (
@@ -138,6 +140,10 @@ const TodaysFollowups = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerPrefill, setCustomerPrefill] = useState(null);
 
+  // Customer data states for view modal
+  const [viewingCustomerData, setViewingCustomerData] = useState(null);
+  const [isCustomerDataLoading, setIsCustomerDataLoading] = useState(false);
+
   // Filter states
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [villageFilter, setVillageFilter] = useState("");
@@ -150,7 +156,8 @@ const TodaysFollowups = () => {
     "Pending",
     "Success",
     "Rejected",
-    "Call Back"
+    "Call Back",
+    "Converted"
   ];
 
   const isToday = (dateString) => {
@@ -394,6 +401,11 @@ const TodaysFollowups = () => {
 
   // Handle edit lead details
   const handleEditLead = (followup) => {
+    // Prevent editing if assigned
+    if (followup.assignedToName) {
+        notify(`Cannot edit: Lead is already assigned to ${followup.assignedToName}.`, 'error');
+        return;
+    }
     setEditingLead({ ...followup });
   };
 
@@ -426,36 +438,113 @@ const TodaysFollowups = () => {
     }
   };
 
-  // Handle view lead details
-  const handleViewLead = (followup) => {
+  // Enhanced handleViewLead with customer data check
+  const handleViewLead = async (followup) => {
     setViewingLead(followup);
+    setViewingCustomerData(null);
+    setIsCustomerDataLoading(false);
+
+    // Check if the lead is converted and fetch customer data
+    if (followup.status === "Success" || followup.status === "Converted") {
+      try {
+        setIsCustomerDataLoading(true);
+        const res = await fetch(`${API_BASE_URL}/customers/byLead/${followup._id}`);
+        
+        if (res.ok) {
+          const customerData = await res.json();
+          setViewingCustomerData(customerData);
+          notify(`Linked Customer details found! Case ID: ${customerData.caseId}`, 'success');
+        } else {
+          notify('Lead marked successful, but could not retrieve linked customer data.', 'error');
+        }
+      } catch (error) {
+        console.error("Fetch customer error:", error);
+        notify('Error retrieving linked customer data.', 'error');
+      } finally {
+        setIsCustomerDataLoading(false);
+      }
+    }
   };
 
-  // Convert lead to customer
-  const handleConvertToCustomer = (followup) => {
-    setShowCustomerModal(true);
-    setCustomerPrefill({
-      name: followup.name,
-      phone: followup.phone,
-      issueType: followup.issueType || "",
-      village: followup.village || "",
-      leadId: followup._id,
-      isEditing: false,
-    });
-    notify(`Preparing to convert ${followup.name} to a Customer.`);
-  };
-
-  const formatDate = (dateString) =>
-    !dateString
-      ? "-"
-      : new Date(dateString).toLocaleString([], {
-          hour12: true,
-          hour: "2-digit",
-          minute: "2-digit",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
+  // Enhanced handleEditFromView for view modal
+  const handleEditFromView = () => {
+    // Check for assignment status before proceeding to edit lead
+    if (viewingLead && !viewingCustomerData && viewingLead.assignedToName) {
+        notify(`Cannot edit: Lead is already assigned to ${viewingLead.assignedToName}.`, 'error');
+        setViewingLead(null);
+        return;
+    }
+      
+    // Proceed with edit flow
+    if (viewingCustomerData) {
+        // Editing Customer
+        setViewingLead(null);
+        setCustomerPrefill({
+            ...viewingCustomerData,
+            leadId: viewingLead._id,
+            isEditing: true,
         });
+        setShowCustomerModal(true);
+        notify(`Opening Edit Customer Mode for Case ${viewingCustomerData.caseId}.`, 'info');
+    } else if (viewingLead) {
+        // Editing Lead (passed assignment check)
+        setViewingLead(null);
+        handleEditLead(viewingLead);
+        notify(`Opening Edit Lead Mode for ${viewingLead.name}.`, 'info');
+    }
+  };
+
+  // Enhanced Convert to Customer function
+  const handleConvertToCustomer = async (followup) => {
+    // Check if a Customer record already exists for this Lead ID
+    try {
+        setIsCustomerDataLoading(true);
+        const res = await fetch(`${API_BASE_URL}/customers/byLead/${followup._id}`);
+        
+        if (res.ok) {
+            // CUSTOMER EXISTS: Open Edit Modal
+            const existingCustomer = await res.json();
+            setCustomerPrefill({
+                ...existingCustomer,
+                leadId: followup._id,
+                isEditing: true,
+            });
+            setShowCustomerModal(true);
+            notify(`Customer ${existingCustomer.name} already exists. Opening Edit Mode.`, 'info');
+        } else {
+            // CUSTOMER DOES NOT EXIST: Open Add Modal
+            setCustomerPrefill({
+                name: followup.name,
+                phone: followup.phone,
+                issueType: followup.issueType || "",
+                village: followup.village || "",
+                leadId: followup._id,
+                isEditing: false,
+            });
+            setShowCustomerModal(true);
+            notify(`Preparing to convert ${followup.name} to a new Customer.`, 'success');
+        }
+    } catch (error) {
+        console.error("Error checking existing customer:", error);
+        notify("Error checking customer status. Please try again.", "error");
+    } finally {
+        setIsCustomerDataLoading(false);
+    }
+  };
+
+  // Helper for Customer Detail items
+  const CustomerDetailItem = ({ icon, label, value }) => (
+    <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex items-start space-x-2">
+      <div className="text-sm pt-0.5 text-blue-500">{icon}</div>
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase">{label}</p>
+        <p className="text-sm font-medium text-gray-800 break-words">{value || "N/A"}</p>
+      </div>
+    </div>
+  );
+
+  // Check if the lead is assigned
+  const isAssigned = (lead) => !!lead.assignedToName;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 sm:p-4 md:p-6">
@@ -691,7 +780,7 @@ const TodaysFollowups = () => {
                       >
                         <FaEdit size={16} />
                       </button>
-                      {f.status === "Success" && (
+                      {(f.status === "Success" || f.status === "Pending") && (
                         <button
                           onClick={() => handleConvertToCustomer(f)}
                           className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
@@ -829,7 +918,7 @@ const TodaysFollowups = () => {
                         >
                           <FaEdit size={16} className="sm:size-[18px]" />
                         </button>
-                        {f.status === "Success" && (
+                        {(f.status === "Success" || f.status === "Pending") && (
                           <button
                             onClick={() => handleConvertToCustomer(f)}
                             className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg sm:rounded-xl transition-all duration-200 hover:scale-110"
@@ -1008,110 +1097,125 @@ const TodaysFollowups = () => {
         </div>
       </Modal>
 
-      {/* View Lead Details Modal */}
+      {/* Enhanced View Lead/Customer Details Modal */}
       <Modal 
         isOpen={!!viewingLead} 
-        onClose={() => setViewingLead(null)} 
-        title="Lead Details"
-        size="lg"
+        onClose={() => {
+          setViewingLead(null);
+          setViewingCustomerData(null);
+        }} 
+        title={viewingCustomerData ? `Customer Details (Case: ${viewingCustomerData.caseId})` : "Lead Details"}
+        size="xl"
       >
         {viewingLead && (
           <div className="space-y-6">
-            {/* Header with Status */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-              <div>
-                <h4 className="text-xl font-bold text-gray-800">{viewingLead.name}</h4>
-                <p className="text-gray-600 mt-1">{viewingLead.phone}</p>
-              </div>
-              <div className="flex items-center space-x-3">
-                <StatusBadge status={viewingLead.status || "Pending"} />
-                <button
-                  onClick={() => {
-                    setEditingLead({ ...viewingLead });
-                    setViewingLead(null);
-                  }}
-                  className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors duration-200 flex items-center space-x-2"
-                >
-                  <FaEdit className="text-sm" />
-                  <span>Edit</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Lead Information Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DetailItem
-                icon={<FaUser className="w-4 h-4" />}
-                label="Customer Name"
-                value={viewingLead.name}
-              />
-              <DetailItem
-                icon={<FaMobileAlt className="w-4 h-4" />}
-                label="Phone Number"
-                value={viewingLead.phone}
-              />
-              <DetailItem
-                icon={<FaInfoCircle className="w-4 h-4" />}
-                label="Issue Type"
-                value={viewingLead.issueType}
-              />
-              <DetailItem
-                icon={<FaMapMarkerAlt className="w-4 h-4" />}
-                label="Village"
-                value={viewingLead.village}
-              />
-              <DetailItem
-                icon={<FaCalendar className="w-4 h-4" />}
-                label="Created Time"
-                value={viewingLead.time}
-              />
-              <DetailItem
-                icon={<FaCalendar className="w-4 h-4" />}
-                label="Callback Time"
-                value={viewingLead.callbackTime}
-                className={viewingLead.callbackTime ? "bg-blue-50 border border-blue-200" : ""}
-              />
-            </div>
-
-            {/* Response Section */}
-            {viewingLead.response && (
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <h5 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
-                  <FaInfoCircle className="mr-2 text-gray-500" />
-                  Customer Response
-                </h5>
-                <p className="text-gray-800 whitespace-pre-wrap">{viewingLead.response}</p>
+            {/* Loading State for Customer Data */}
+            {isCustomerDataLoading && (
+              <div className="p-4 bg-yellow-100 rounded-xl text-center text-yellow-800 flex items-center justify-center space-x-2">
+                <FaSyncAlt className="animate-spin" />
+                <span>Checking for linked customer record...</span>
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-6 border-t border-gray-200">
-              <button
-                onClick={() => initiateCall(viewingLead)}
-                className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold flex items-center justify-center space-x-2"
-              >
-                <FaPhone />
-                <span>Call Again</span>
-              </button>
-              <button
-                onClick={() => handleMessage(viewingLead.phone)}
-                className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold flex items-center justify-center space-x-2"
-              >
-                <FaWhatsapp />
-                <span>WhatsApp</span>
-              </button>
-              {viewingLead.status === "Success" && (
+            {/* Display Customer Data (if found) */}
+            {viewingCustomerData ? (
+              <div className="space-y-6">
+                <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                    <h4 className="text-xl font-bold text-green-800">Customer Conversion Successful!</h4>
+                    <p className="text-sm text-gray-600 mt-1">Original Lead ID: {viewingCustomerData.convertedFromLeadId}</p>
+                </div>
+
+                <h5 className="text-lg font-semibold text-gray-800 border-b pb-2">Customer Information</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <CustomerDetailItem icon={<FaUser />} label="Full Name" value={viewingCustomerData.name} />
+                  <CustomerDetailItem icon={<FaMobileAlt />} label="Phone" value={viewingCustomerData.phone} />
+                  <CustomerDetailItem icon={<FaTimes />} label="Case Status" value={viewingCustomerData.status} />
+                  <CustomerDetailItem icon={<FaInfoCircle />} label="Problem" value={viewingCustomerData.problem} />
+                  <CustomerDetailItem icon={<FaSearch />} label="CIBIL Score" value={viewingCustomerData.cibilBefore || 'N/A'} />
+                  <CustomerDetailItem icon={<FaCalendar />} label="Created At" value={new Date(viewingCustomerData.createdAt).toLocaleDateString()} />
+                  <CustomerDetailItem icon={<FaUser />} label="Telecaller" value={viewingCustomerData.telecallerName} />
+                  <CustomerDetailItem icon={<FaMapMarkerAlt />} label="Address" value={viewingCustomerData.address} className="md:col-span-2" />
+                </div>
+
+                <h5 className="text-lg font-semibold text-gray-800 border-b pt-4 pb-2">Bank & Loan Details</h5>
+                <div className="space-y-4">
+                  {Object.entries(viewingCustomerData.bankDetails || {}).map(([bankName, details]) => (
+                    <div key={bankName} className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                      <h6 className="font-bold text-blue-800 mb-2">{bankName}</h6>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <p className="col-span-1">A/C Number: <span className="font-mono text-gray-700">{details.accountNumber}</span></p>
+                        <p className="col-span-1">Loan Type: <span className="font-medium text-gray-700">{details.loanType}</span></p>
+                        <p className="col-span-2">Issues: <span className="text-red-600">{details.issues?.join(', ') || 'None reported'}</span></p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            ) : (
+              /* Display Original Lead Data */
+              <div className="space-y-6">
+                <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                    <h4 className="text-xl font-bold text-yellow-800">Lead Details: {viewingLead.name}</h4>
+                    {(viewingLead.status === "Success" || viewingLead.status === "Converted") && 
+                      <p className="text-sm text-red-600 mt-1">Status is '{viewingLead.status}', but linked customer data was not found.</p>
+                    }
+                </div>
+
+                {/* Lead Information Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <DetailItem icon={<FaUser />} label="Name" value={viewingLead.name} />
+                    <DetailItem icon={<FaMobileAlt />} label="Phone" value={viewingLead.phone} />
+                    <DetailItem icon={<FaInfoCircle />} label="Issue Type" value={viewingLead.issueType} />
+                    <DetailItem icon={<FaMapMarkerAlt />} label="Village" value={viewingLead.village} />
+                    <DetailItem icon={<FaCalendar />} label="Status" value={viewingLead.status} />
+                    <DetailItem icon={<FaCalendar />} label="Callback Time" value={viewingLead.callbackTime} />
+
+                    {/* Display Assigned Details if available */}
+                    {viewingLead.assignedToName && (
+                        <div className="sm:col-span-2">
+                           <DetailItem 
+                             icon={<FaUserTie className="text-indigo-500" />} 
+                             label="Assigned To" 
+                             value={viewingLead.assignedToName} 
+                             className="bg-indigo-50 border border-indigo-200"
+                           />
+                        </div>
+                    )}
+                </div>
+
+                {viewingLead.response && (
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-gray-200">
+                    <p className="text-sm font-semibold text-gray-600 mb-2">Last Response / Notes</p>
+                    <p className="text-gray-800 italic text-sm sm:text-base whitespace-pre-wrap">{viewingLead.response}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* View Modal Footer with Edit Button */}
+            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sm:pt-6 border-t border-gray-200">
                 <button
-                  onClick={() => {
-                    handleConvertToCustomer(viewingLead);
-                    setViewingLead(null);
-                  }}
-                  className="px-6 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold flex items-center justify-center space-x-2"
+                    onClick={handleEditFromView}
+                    disabled={viewingLead && !viewingCustomerData && isAssigned(viewingLead)}
+                    className={`px-4 sm:px-6 py-2 sm:py-3 text-white rounded-lg sm:rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 shadow-md hover:shadow-lg font-semibold text-sm sm:text-base order-1 sm:order-1 flex items-center justify-center ${
+                      viewingLead && !viewingCustomerData && isAssigned(viewingLead) 
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600'
+                    }`}
                 >
-                  <FaUserPlus />
-                  <span>Convert to Customer</span>
+                    <FaEdit className="mr-2" /> 
+                    {viewingCustomerData ? "Edit Customer" : "Edit Lead"}
                 </button>
-              )}
+                <button
+                    onClick={() => {
+                        setViewingLead(null);
+                        setViewingCustomerData(null); 
+                    }}
+                    className="px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 font-semibold text-sm sm:text-base order-2 sm:order-2"
+                >
+                    Close View
+                </button>
             </div>
           </div>
         )}
@@ -1216,15 +1320,31 @@ const TodaysFollowups = () => {
         )}
       </Modal>
 
-      {/* Add Customer Modal (for Convert) */}
-      {showCustomerModal && !customerPrefill?.isEditing && (
+      {/* Add Customer Modal */}
+      {showCustomerModal && customerPrefill && !customerPrefill.isEditing && (
         <AddCustomer
           isOpen={showCustomerModal}
           onClose={() => {
             setShowCustomerModal(false);
             setCustomerPrefill(null);
+            setNotification({ msg: "Customer conversion complete, refreshing leads...", type: "success" });
           }}
           prefill={customerPrefill}
+          notify={notify}
+        />
+      )}
+      
+      {/* Edit Customer Modal */}
+      {showCustomerModal && customerPrefill && customerPrefill.isEditing && (
+        <EditCustomer
+          isOpen={showCustomerModal}
+          onClose={() => {
+            setShowCustomerModal(false);
+            setCustomerPrefill(null);
+            setNotification({ msg: "Customer update complete, refreshing leads...", type: "success" });
+          }}
+          customerData={customerPrefill}
+          customerId={customerPrefill._id}
           notify={notify}
         />
       )}

@@ -17,6 +17,7 @@ const Calllog = require('./models/Calllog.js');
 const fs = require("fs");
 const Referral = require('./models/Referral.js');
 const ChatResponse = require('./models/ChatResponse.js');
+const Salary = require('./models/Salary.js');
 const AttendenceLog = require('./models/AttendenceLog.js');
 const uploadFiles = require('./middleware/upload.js')
 const app = express();
@@ -274,22 +275,22 @@ app.post('/api/customers', upload.fields([
     ...Array.from({ length: 10 }, (_, i) => ({ name: `customFieldFile_${i}`, maxCount: 1 }))
 ]), async (req, res) => {
     try {
-        // ... (Existing parsing and destructuring of req.body) ...
-        // Destructure fields, including the restored 'otherBanks' and the CIBIL field 'cibil'
+        // 👇 MODIFICATION 1: Destructure the new field convertedFromLeadId
         const {
             name, phone, email, aadhaar, pan, cibil, address, problem,
             banks, otherBanks, bankDetails, customFields, pageNumber,
-            referredPerson, // <--- Key Field
-            telecallerId, telecallerName, referredPersonPhone // Assuming you might have a referredPersonPhone field
+            referredPerson, 
+            telecallerId, telecallerName, referredPersonPhone,
+            convertedFromLeadId // <--- NEW KEY FIELD FOR CONVERSION
         } = req.body;
 
         // --- Data Parsing (Existing Logic) ---
-        let parsedBanks = parseArrayField(banks);
+        // Ensure parseArrayField is defined elsewhere in your file scope
+        let parsedBanks = parseArrayField(banks); 
         let parsedOtherBanks = parseArrayField(otherBanks);
         let parsedBankDetails = {};
         let parsedCustomFields = [];
         let cibilScore = cibil ? parseInt(cibil) : undefined;
-        // ... (JSON parsing try/catch for bankDetails and customFields) ...
 
         try {
             parsedBankDetails = bankDetails ? JSON.parse(bankDetails) : {};
@@ -308,7 +309,6 @@ app.post('/api/customers', upload.fields([
         const updatedCustomFields = Array.isArray(parsedCustomFields) ? parsedCustomFields : [];
         
         if (req.files) {
-            // ... (Mapping file uploads to documents and customFields) ...
             if (req.files.aadhaarDoc) documents.aadhaarDoc = req.files.aadhaarDoc[0].filename;
             if (req.files.panDoc) documents.panDoc = req.files.panDoc[0].filename;
             if (req.files.accountStatementDoc) documents.accountStatementDoc = req.files.accountStatementDoc[0].filename;
@@ -327,13 +327,14 @@ app.post('/api/customers', upload.fields([
         }
         
         // ==========================================================
-        // 🚀 NEW LOGIC: Referral Table Update/Creation
+        // 🚀 NEW LOGIC: Referral Table Update/Creation (Unchanged)
         // ==========================================================
         if (referredPerson?.trim()) {
             const referralName = referredPerson.trim();
             // Assuming phone is the unique identifier for a referral partner
             const referralQuery = referredPersonPhone?.trim() ? { phone: referredPersonPhone.trim() } : { name: referralName };
             
+            // NOTE: 'Referral' model must be defined/imported in this scope.
             let referralEntry = await Referral.findOne(referralQuery);
 
             if (referralEntry) {
@@ -343,6 +344,7 @@ app.post('/api/customers', upload.fields([
                 console.log(`Updated existing referral: ${referralName}`);
             } else {
                 // Referral does not exist: Create new entry
+                // NOTE: 'Referral' model must be defined/imported in this scope.
                 referralEntry = new Referral({
                     name: referralName,
                     phone: referredPersonPhone?.trim() || 'N/A',
@@ -355,7 +357,7 @@ app.post('/api/customers', upload.fields([
         }
         // ==========================================================
         
-        // --- Final Customer Data Object (Existing Logic) ---
+        // --- Final Customer Data Object (Modified) ---
         const customerData = {
             name: name?.trim(),
             phone: phone?.trim(),
@@ -369,10 +371,12 @@ app.post('/api/customers', upload.fields([
             otherBanks: parsedOtherBanks,
             bankDetails: parsedBankDetails,
             customFields: updatedCustomFields,
-            referredPerson: referredPerson?.trim(), // Ensure this field is saved
+            referredPerson: referredPerson?.trim(),
             telecallerId,
             telecallerName: telecallerName?.trim(),
-            documents 
+            documents,
+            // 👇 MODIFICATION 2: Include the convertedFromLeadId field in the data to be saved
+            ...(convertedFromLeadId && { convertedFromLeadId: convertedFromLeadId.trim() })
         };
 
         if (pageNumber && !isNaN(pageNumber)) {
@@ -382,6 +386,7 @@ app.post('/api/customers', upload.fields([
         console.log('Creating customer with data:', customerData);
 
         // Create new customer
+        // NOTE: 'Customer' model must be defined/imported in this scope.
         const customer = new Customer(customerData);
         await customer.save();
 
@@ -410,6 +415,25 @@ app.post('/api/customers', upload.fields([
     }
 });
 
+app.get('/api/customers/byLead/:leadId', async (req, res) => {
+    try {
+        const leadId = req.params.leadId;
+        
+        // Find the customer whose 'convertedFromLeadId' matches the provided leadId
+        const customer = await Customer.findOne({ convertedFromLeadId: leadId });
+
+        if (!customer) {
+            return res.status(404).json({ message: 'Customer not found for this lead ID.' });
+        }
+
+        // Return the full customer document
+        res.status(200).json(customer);
+
+    } catch (error) {
+        console.error('Error fetching customer by lead ID:', error);
+        res.status(500).json({ message: 'Server error fetching customer data.', error: error.message });
+    }
+});
 
 app.put('/api/customers/:id', upload.fields([
   { name: "aadhaarDoc", maxCount: 1 },
@@ -2763,6 +2787,36 @@ app.post('/api/:caseId/assign', upload.single('agentPaymentProof'), async (req, 
         }
         res.status(500).json({ error: "Server error during case assignment." });
     }
+});
+app.post("/api/salary", async (req, res) => {
+  try {
+    const { user, amount, date, method, description } = req.body;
+
+    if (!user || !amount || !date || !method) {
+      return res.status(400).json({
+        success: false,
+        message: "User, amount, date, and method are required",
+      });
+    }
+
+    const salary = new Salary({ user, amount, date, method, description });
+    await salary.save();
+
+    res.json({ success: true, salary });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// (Optional) Fetch all salary records
+app.get("/api/salary", async (req, res) => {
+  try {
+    const salaries = await Salary.find().populate("user", "name email role");
+    res.json({ success: true, salaries });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+
 });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
